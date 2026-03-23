@@ -110,6 +110,17 @@ class PlanStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class BackupType(str, Enum):
+    AUTO = "auto"
+    MANUAL = "manual"
+
+
+class BackupStatus(str, Enum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 # =============================================================================
 # CLOTHING STATE MODEL
 # =============================================================================
@@ -253,7 +264,7 @@ class ClothingState(BaseModel):
 
 
 # =============================================================================
-# REGISTRATION MODEL (DENGAN KOLOM BARU)
+# REGISTRATION MODEL
 # =============================================================================
 
 class Registration(BaseModel):
@@ -300,30 +311,24 @@ class Registration(BaseModel):
     last_climax_time: Optional[float] = None
     cooldown_until: Optional[float] = None
     
-    # ===== KOLOM BARU (DIMINTA RnD) =====
-    
-    # Weighted Memory Score (0-1) untuk ranking memory importance
+    # ===== NEW FIELDS FOR REALISM 9.9 =====
+    # Weighted Memory
     weighted_memory_score: float = 0.5
+    weighted_memory_data: Dict = Field(default_factory=dict)
     
-    # Secondary Emotion (emosi sekunder yang berbeda dari primary)
+    # Emotional Bias
+    emotional_bias: Dict = Field(default_factory=dict)
+    
+    # Secondary Emotion
     secondary_emotion: Optional[str] = None
     secondary_arousal: int = 0
     secondary_emotion_reason: Optional[str] = None
     
-    # Physical Sensation (sensasi fisik yang dirasakan bot)
+    # Physical Sensation
     physical_sensation: str = "biasa aja"
     physical_hunger: int = 30
     physical_thirst: int = 30
     physical_temperature: int = 25
-    
-    # Fulfilled Promises Tracking (janji yang sudah ditepati)
-    fulfilled_promises: List[Dict] = Field(default_factory=list)
-    pending_promises: List[Dict] = Field(default_factory=list)
-    
-    # ===== END KOLOM BARU =====
-    
-    # Weighted Memory Data (detail)
-    weighted_memory_data: Dict = Field(default_factory=dict)
     
     # Metadata
     metadata: Dict = Field(default_factory=dict)
@@ -334,43 +339,6 @@ class Registration(BaseModel):
         if not 1 <= v <= 12:
             raise ValueError('Level must be between 1 and 12')
         return v
-    
-    def add_fulfilled_promise(self, promise_text: str, chat_id: Optional[int] = None):
-        """Tambah janji yang ditepati"""
-        self.fulfilled_promises.append({
-            'text': promise_text,
-            'fulfilled_at': time.time(),
-            'chat_id': chat_id
-        })
-        # Keep only last 100
-        if len(self.fulfilled_promises) > 100:
-            self.fulfilled_promises = self.fulfilled_promises[-100:]
-    
-    def add_pending_promise(self, promise_text: str, chat_id: Optional[int] = None):
-        """Tambah janji yang belum ditepati"""
-        self.pending_promises.append({
-            'text': promise_text,
-            'created_at': time.time(),
-            'chat_id': chat_id,
-            'status': 'pending'
-        })
-        # Keep only last 50
-        if len(self.pending_promises) > 50:
-            self.pending_promises = self.pending_promises[-50:]
-    
-    def update_weighted_memory_score(self, new_score: float):
-        """Update weighted memory score"""
-        self.weighted_memory_score = max(0.0, min(1.0, new_score))
-    
-    def update_physical_sensation(self, sensation: str, hunger: int = None, thirst: int = None, temp: int = None):
-        """Update sensasi fisik"""
-        self.physical_sensation = sensation
-        if hunger is not None:
-            self.physical_hunger = max(0, min(100, hunger))
-        if thirst is not None:
-            self.physical_thirst = max(0, min(100, thirst))
-        if temp is not None:
-            self.physical_temperature = max(0, min(40, temp))
     
     def to_dict(self) -> Dict:
         return {
@@ -403,8 +371,10 @@ class Registration(BaseModel):
             'intimacy_cycle_count': self.intimacy_cycle_count,
             'last_climax_time': self.last_climax_time,
             'cooldown_until': self.cooldown_until,
-            # Kolom baru
+            # NEW FIELDS
             'weighted_memory_score': self.weighted_memory_score,
+            'weighted_memory_data': json.dumps(self.weighted_memory_data),
+            'emotional_bias': json.dumps(self.emotional_bias),
             'secondary_emotion': self.secondary_emotion,
             'secondary_arousal': self.secondary_arousal,
             'secondary_emotion_reason': self.secondary_emotion_reason,
@@ -412,9 +382,6 @@ class Registration(BaseModel):
             'physical_hunger': self.physical_hunger,
             'physical_thirst': self.physical_thirst,
             'physical_temperature': self.physical_temperature,
-            'fulfilled_promises': json.dumps(self.fulfilled_promises),
-            'pending_promises': json.dumps(self.pending_promises),
-            'weighted_memory_data': json.dumps(self.weighted_memory_data),
             'metadata': json.dumps(self.metadata)
         }
     
@@ -450,8 +417,10 @@ class Registration(BaseModel):
             intimacy_cycle_count=data.get('intimacy_cycle_count', 0),
             last_climax_time=data.get('last_climax_time'),
             cooldown_until=data.get('cooldown_until'),
-            # Kolom baru
+            # NEW FIELDS
             weighted_memory_score=data.get('weighted_memory_score', 0.5),
+            weighted_memory_data=json.loads(data.get('weighted_memory_data', '{}')),
+            emotional_bias=json.loads(data.get('emotional_bias', '{}')),
             secondary_emotion=data.get('secondary_emotion'),
             secondary_arousal=data.get('secondary_arousal', 0),
             secondary_emotion_reason=data.get('secondary_emotion_reason'),
@@ -459,9 +428,6 @@ class Registration(BaseModel):
             physical_hunger=data.get('physical_hunger', 30),
             physical_thirst=data.get('physical_thirst', 30),
             physical_temperature=data.get('physical_temperature', 25),
-            fulfilled_promises=json.loads(data.get('fulfilled_promises', '[]')),
-            pending_promises=json.loads(data.get('pending_promises', '[]')),
-            weighted_memory_data=json.loads(data.get('weighted_memory_data', '{}')),
             metadata=json.loads(data.get('metadata', '{}'))
         )
     
@@ -476,6 +442,31 @@ class Registration(BaseModel):
         if self.cooldown_until and time.time() < self.cooldown_until:
             return False
         return True
+    
+    def get_progress_to_next_level(self) -> float:
+        from config import settings
+        
+        if self.level <= 10:
+            target = settings.level.level_targets.get(self.level + 1, 0)
+            if target == 0:
+                return 100.0
+            current_target = settings.level.level_targets.get(self.level, 0)
+            progress = ((self.total_chats - current_target) / (target - current_target)) * 100
+            return max(0, min(100, progress))
+        else:
+            if self.level == 11:
+                total = settings.level.level_11_max - settings.level.level_11_min
+                if total <= 0:
+                    return 0
+                progress = ((self.total_chats - settings.level.level_11_min) / total) * 100
+                return max(0, min(100, progress))
+            elif self.level == 12:
+                total = settings.level.level_12_max - settings.level.level_12_min
+                if total <= 0:
+                    return 100
+                progress = ((self.total_chats - settings.level.level_12_min) / total) * 100
+                return max(0, min(100, progress))
+        return 0
 
 
 # =============================================================================
@@ -589,6 +580,7 @@ class StateTracker(BaseModel):
     emotion_user: str = "netral"
     arousal_user: int = 0
     
+    # ===== NEW FIELDS FOR REALISM 9.9 =====
     # Secondary Emotion
     secondary_emotion: Optional[str] = None
     secondary_arousal: int = 0
@@ -632,6 +624,7 @@ class StateTracker(BaseModel):
             'mood_bot': self.mood_bot.value,
             'emotion_user': self.emotion_user,
             'arousal_user': self.arousal_user,
+            # NEW FIELDS
             'secondary_emotion': self.secondary_emotion,
             'secondary_arousal': self.secondary_arousal,
             'family_status': self.family_status.value if self.family_status else None,
@@ -671,6 +664,7 @@ class StateTracker(BaseModel):
             mood_bot=MoodType(data.get('mood_bot', 'normal')),
             emotion_user=data.get('emotion_user', 'netral'),
             arousal_user=data.get('arousal_user', 0),
+            # NEW FIELDS
             secondary_emotion=data.get('secondary_emotion'),
             secondary_arousal=data.get('secondary_arousal', 0),
             family_status=FamilyStatus(data['family_status']) if data.get('family_status') else None,
@@ -777,17 +771,6 @@ USER_PHYSICAL_TEMPLATES = {
 # =============================================================================
 # BACKUP MODEL
 # =============================================================================
-
-class BackupType(str, Enum):
-    AUTO = "auto"
-    MANUAL = "manual"
-
-
-class BackupStatus(str, Enum):
-    PENDING = "pending"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
 
 class Backup(BaseModel):
     """Model untuk history backup"""

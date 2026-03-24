@@ -65,6 +65,7 @@ class Repository:
             """
             INSERT INTO registrations (
                 id, role, sequence, status, created_at, last_updated,
+                bot_identity, user_identity,
                 bot_name, bot_age, bot_height, bot_weight, bot_chest, bot_hijab,
                 user_name, user_status, user_age, user_height, user_weight,
                 user_penis, user_artist_ref,
@@ -76,11 +77,12 @@ class Repository:
                 secondary_emotion, secondary_arousal, secondary_emotion_reason,
                 physical_sensation, physical_hunger, physical_thirst, physical_temperature,
                 metadata
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data['id'], data['role'], data['sequence'], data['status'],
                 data['created_at'], data['last_updated'],
+                data['bot_identity'], data['user_identity'],
                 data['bot_name'], data['bot_age'], data['bot_height'],
                 data['bot_weight'], data['bot_chest'], data['bot_hijab'],
                 data['user_name'], data['user_status'], data['user_age'],
@@ -148,6 +150,10 @@ class Repository:
             """
             UPDATE registrations SET
                 status = ?, last_updated = ?,
+                bot_identity = ?, user_identity = ?,
+                bot_name = ?, bot_age = ?, bot_height = ?, bot_weight = ?, bot_chest = ?, bot_hijab = ?,
+                user_name = ?, user_status = ?, user_age = ?, user_height = ?, user_weight = ?,
+                user_penis = ?, user_artist_ref = ?,
                 level = ?, total_chats = ?, total_climax_bot = ?, total_climax_user = ?,
                 stamina_bot = ?, stamina_user = ?,
                 in_intimacy_cycle = ?, intimacy_cycle_count = ?,
@@ -160,6 +166,12 @@ class Repository:
             """,
             (
                 data['status'], registration.last_updated,
+                data['bot_identity'], data['user_identity'],
+                data['bot_name'], data['bot_age'], data['bot_height'],
+                data['bot_weight'], data['bot_chest'], data['bot_hijab'],
+                data['user_name'], data['user_status'], data['user_age'],
+                data['user_height'], data['user_weight'], data['user_penis'],
+                data['user_artist_ref'],
                 data['level'], data['total_chats'], data['total_climax_bot'],
                 data['total_climax_user'], data['stamina_bot'], data['stamina_user'],
                 data['in_intimacy_cycle'], data['intimacy_cycle_count'],
@@ -354,20 +366,20 @@ class Repository:
         return memories
     
     # =========================================================================
-    # STATE TRACKER OPERATIONS
+    # STATE TRACKER OPERATIONS (TANPA EMOTION/AROUSAL/MOOD)
     # =========================================================================
     
     async def save_state(self, state: StateTracker):
-        """Simpan state tracker"""
+        """Simpan state tracker (tanpa emotion/arousal/mood)"""
         db = await self._get_db()
         data = state.to_dict()
+        
+        state.updated_at = time.time()
         
         existing = await db.fetch_one(
             "SELECT registration_id FROM state_tracker WHERE registration_id = ?",
             (state.registration_id,)
         )
-        
-        state.updated_at = time.time()
         
         if existing:
             await db.execute(
@@ -379,9 +391,6 @@ class Repository:
                     clothing_bot_inner_top = ?, clothing_bot_inner_bottom = ?,
                     clothing_user_outer = ?, clothing_user_outer_bottom = ?,
                     clothing_user_inner_bottom = ?, clothing_history = ?,
-                    emotion_bot = ?, arousal_bot = ?, mood_bot = ?,
-                    emotion_user = ?, arousal_user = ?,
-                    secondary_emotion = ?, secondary_arousal = ?,
                     family_status = ?, family_location = ?, family_activity = ?,
                     family_estimate_return = ?,
                     activity_bot = ?, activity_user = ?,
@@ -391,17 +400,13 @@ class Repository:
                 """,
                 (
                     data['location_bot'], data['location_user'],
-                    data['position_bot'], data['position_user'],
-                    data['position_relative'],
+                    data['position_bot'], data['position_user'], data['position_relative'],
                     data['clothing_bot_outer'], data['clothing_bot_outer_bottom'],
                     data['clothing_bot_inner_top'], data['clothing_bot_inner_bottom'],
                     data['clothing_user_outer'], data['clothing_user_outer_bottom'],
                     data['clothing_user_inner_bottom'], data['clothing_history'],
-                    data['emotion_bot'], data['arousal_bot'], data['mood_bot'],
-                    data['emotion_user'], data['arousal_user'],
-                    data['secondary_emotion'], data['secondary_arousal'],
-                    data['family_status'], data['family_location'],
-                    data['family_activity'], data['family_estimate_return'],
+                    data['family_status'], data['family_location'], data['family_activity'],
+                    data['family_estimate_return'],
                     data['activity_bot'], data['activity_user'],
                     data['current_time'], data['time_override_history'],
                     data['updated_at'], state.registration_id
@@ -416,31 +421,25 @@ class Repository:
                     clothing_bot_outer_bottom, clothing_bot_inner_top,
                     clothing_bot_inner_bottom, clothing_user_outer,
                     clothing_user_outer_bottom, clothing_user_inner_bottom,
-                    clothing_history, emotion_bot, arousal_bot, mood_bot,
-                    emotion_user, arousal_user, secondary_emotion, secondary_arousal,
-                    family_status, family_location, family_activity,
-                    family_estimate_return, activity_bot, activity_user,
-                    current_time, time_override_history, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    clothing_history, family_status, family_location,
+                    family_activity, family_estimate_return, activity_bot,
+                    activity_user, current_time, time_override_history, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    state.registration_id, data['location_bot'],
-                    data['location_user'], data['position_bot'],
-                    data['position_user'], data['position_relative'],
+                    state.registration_id, data['location_bot'], data['location_user'],
+                    data['position_bot'], data['position_user'], data['position_relative'],
                     data['clothing_bot_outer'], data['clothing_bot_outer_bottom'],
                     data['clothing_bot_inner_top'], data['clothing_bot_inner_bottom'],
                     data['clothing_user_outer'], data['clothing_user_outer_bottom'],
                     data['clothing_user_inner_bottom'], data['clothing_history'],
-                    data['emotion_bot'], data['arousal_bot'], data['mood_bot'],
-                    data['emotion_user'], data['arousal_user'],
-                    data['secondary_emotion'], data['secondary_arousal'],
-                    data['family_status'], data['family_location'],
-                    data['family_activity'], data['family_estimate_return'],
-                    data['activity_bot'], data['activity_user'],
-                    data['current_time'], data['time_override_history'],
-                    data['updated_at']
+                    data['family_status'], data['family_location'], data['family_activity'],
+                    data['family_estimate_return'], data['activity_bot'], data['activity_user'],
+                    data['current_time'], data['time_override_history'], data['updated_at']
                 )
             )
+        
+        logger.debug(f"State saved for {state.registration_id}")
     
     async def load_state(self, registration_id: str) -> Optional[StateTracker]:
         """Load state tracker"""

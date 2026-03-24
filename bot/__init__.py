@@ -33,7 +33,6 @@ __all__ = [
     'error_handler',
     'help_command',
     'cancel_command',
-    'status_command_handler',
     '_active_engines',
     'unpause_callback',
     'new_character_callback',

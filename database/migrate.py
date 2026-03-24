@@ -259,6 +259,11 @@ async def run_migrations():
         return False
 
 
+async def migrate():
+    """Alias for run_migrations (for compatibility)"""
+    return await run_migrations()
+
+
 def run_migration_sync():
     return asyncio.run(run_migrations())
 

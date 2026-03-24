@@ -23,27 +23,30 @@ logger = logging.getLogger(__name__)
 
 
 async def create_registrations_table(db):
-    """Create registrations table with new JSON columns"""
+    """Create registrations table (CLEAN RESET)"""
+
+    await db.execute("DROP TABLE IF EXISTS registrations")
+    logger.warning("⚠️ Dropped old registrations table (force clean)")
+
     await db.execute('''
-        CREATE TABLE IF NOT EXISTS registrations (
+        CREATE TABLE registrations (
             id TEXT PRIMARY KEY,
             role TEXT NOT NULL,
             sequence INTEGER NOT NULL,
             status TEXT DEFAULT 'active',
             created_at REAL NOT NULL,
             last_updated REAL NOT NULL,
-            
-            -- JSON Identity
+
             bot_identity TEXT DEFAULT '{}',
             user_identity TEXT DEFAULT '{}',
-            
-            -- Backward compatibility
+
             bot_name TEXT NOT NULL,
             bot_age INTEGER,
             bot_height INTEGER,
             bot_weight INTEGER,
             bot_chest TEXT,
             bot_hijab BOOLEAN DEFAULT 0,
+
             user_name TEXT NOT NULL,
             user_status TEXT DEFAULT 'lajang',
             user_age INTEGER,
@@ -51,49 +54,67 @@ async def create_registrations_table(db):
             user_weight INTEGER,
             user_penis INTEGER,
             user_artist_ref TEXT,
-            
-            -- Progress
+
             level INTEGER DEFAULT 1,
             total_chats INTEGER DEFAULT 0,
             total_climax_bot INTEGER DEFAULT 0,
             total_climax_user INTEGER DEFAULT 0,
             stamina_bot INTEGER DEFAULT 100,
             stamina_user INTEGER DEFAULT 100,
-            
-            -- Intimacy Cycle
+
             in_intimacy_cycle BOOLEAN DEFAULT 0,
             intimacy_cycle_count INTEGER DEFAULT 0,
             last_climax_time REAL,
             cooldown_until REAL,
-            
-            -- Memory
+
             weighted_memory_score REAL DEFAULT 0.5,
             weighted_memory_data TEXT DEFAULT '{}',
             emotional_bias TEXT DEFAULT '{}',
-            
-            -- Secondary Emotion
+
             secondary_emotion TEXT,
             secondary_arousal INTEGER DEFAULT 0,
             secondary_emotion_reason TEXT,
-            
-            -- Physical Sensation
+
             physical_sensation TEXT DEFAULT 'biasa aja',
             physical_hunger INTEGER DEFAULT 30,
             physical_thirst INTEGER DEFAULT 30,
             physical_temperature INTEGER DEFAULT 25,
-            
-            -- Metadata
+
             metadata TEXT DEFAULT '{}'
         )
     ''')
-    
-    # Indexes
+
+    await db.commit()
+
+    # VALIDASI
+    columns = await db.fetch_all("PRAGMA table_info(registrations)")
+    column_names = [col['name'] for col in columns]
+
+    logger.info(f"📊 TOTAL REGISTRATIONS COLUMNS: {len(column_names)}")
+
+    if len(column_names) != 42:
+        raise Exception(f"❌ Column mismatch: {len(column_names)} != 42")
+
     await db.execute("CREATE INDEX IF NOT EXISTS idx_registrations_role ON registrations(role, status)")
     await db.execute("CREATE INDEX IF NOT EXISTS idx_registrations_updated ON registrations(last_updated)")
     await db.execute("CREATE INDEX IF NOT EXISTS idx_registrations_level ON registrations(level)")
-    
-    logger.info("✅ Table 'registrations' created")
 
+    await db.commit()
+    logger.info("✅ registrations table ready")
+
+
+# ===================== LONG TERM MEMORY =====================
+async def create_long_term_memory_table(db):
+    """Create long_term_memory table (CLEAN RESET)"""
+
+    await db.execute("DROP TABLE IF EXISTS long_term_memory")
+    logger.warning("⚠️ Dropped old long_term_memory table (force clean)")
+
+    await db.execute('''
+        CREATE TABLE long_term_memory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            registration_id TEXT NOT NULL,
+    logger.info("✅ long_term_memory table ready")
 
 async def create_working_memory_table(db):
     """Create working_memory table"""

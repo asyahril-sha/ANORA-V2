@@ -162,6 +162,7 @@ async def _update_progress(registration_id: str, ai_engine: AIEngine) -> None:
         character = await identity_manager.get_character(registration_id)
         
         if not character:
+            logger.warning(f"Character not found for {registration_id}")
             return
         
         # Update total chats
@@ -188,16 +189,38 @@ async def _update_progress(registration_id: str, ai_engine: AIEngine) -> None:
         db_reg = character.to_db_registration()
         await identity_manager.repo.update_registration(db_reg)
         
-        # Save state (state adalah dictionary)
-        state = await identity_manager.get_character_state(registration_id)
-        if state and isinstance(state, dict):
-            state['updated_at'] = time.time()
-            from database.models import StateTracker
-            state_obj = StateTracker.from_dict(state)
-            await identity_manager.repo.save_state(state_obj)
+        # Save state dengan pengecekan aman
+        try:
+            state = await identity_manager.get_character_state(registration_id)
+            
+            if state is not None:
+                # Jika state adalah dict
+                if isinstance(state, dict):
+                    state['updated_at'] = time.time()
+                    from database.models import StateTracker
+                    state_obj = StateTracker.from_dict(state)
+                    await identity_manager.repo.save_state(state_obj)
+                    logger.debug(f"State saved (dict) for {registration_id}")
+                
+                # Jika state adalah objek StateTracker
+                elif hasattr(state, 'updated_at'):
+                    state.updated_at = time.time()
+                    await identity_manager.repo.save_state(state)
+                    logger.debug(f"State saved (object) for {registration_id}")
+                
+                # Jika state adalah string atau tipe lain
+                else:
+                    logger.warning(f"State has unexpected type {type(state)} for {registration_id}, skipping save")
+            else:
+                logger.debug(f"No state found for {registration_id}")
+                
+        except Exception as state_error:
+            logger.error(f"Error saving state for {registration_id}: {state_error}")
         
     except Exception as e:
-        logger.error(f"Error updating progress: {e}")
+        logger.error(f"Error updating progress for {registration_id}: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 # =============================================================================

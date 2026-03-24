@@ -1,99 +1,115 @@
-# database/migrate.py
+```python
+# fix_missing_columns.py
+# -*- coding: utf-8 -*-
+"""
+=============================================================================
+AMORIA - FIX MISSING COLUMNS (SAFE MIGRATION TOOL)
+=============================================================================
 
+Tujuan:
+- Menambahkan kolom yang belum ada di schema lama
+- Tanpa reset database
+- Aman untuk production (idempotent)
+
+Usage:
+    python fix_missing_columns.py
+"""
+
+import asyncio
 import logging
 
+from database.postgres_connection import get_db
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def create_registrations_table(db):
-    await db.execute("DROP TABLE IF EXISTS registrations")
+async def fix_state_tracker_columns(db):
+    """Fix missing columns di state_tracker"""
+
+    logger.info("🔧 Checking & fixing state_tracker columns...")
 
     await db.execute("""
-        CREATE TABLE registrations (
-            id TEXT PRIMARY KEY,
-            role TEXT,
-            sequence INTEGER,
-            status TEXT,
-            created_at REAL,
-            last_updated REAL,
-            bot_identity TEXT,
-            user_identity TEXT,
-            bot_name TEXT,
-            user_name TEXT,
-            level INTEGER,
-            total_chats INTEGER,
-            stamina_bot INTEGER,
-            stamina_user INTEGER,
-            metadata TEXT
-        )
+        DO $$
+        BEGIN
+            -- BOT CLOTHING
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'state_tracker' 
+                AND column_name = 'clothing_bot_outer_bottom'
+            ) THEN
+                ALTER TABLE state_tracker ADD COLUMN clothing_bot_outer_bottom TEXT;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'state_tracker' 
+                AND column_name = 'clothing_bot_inner_top'
+            ) THEN
+                ALTER TABLE state_tracker ADD COLUMN clothing_bot_inner_top TEXT;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'state_tracker' 
+                AND column_name = 'clothing_bot_inner_bottom'
+            ) THEN
+                ALTER TABLE state_tracker ADD COLUMN clothing_bot_inner_bottom TEXT;
+            END IF;
+
+            -- USER CLOTHING
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'state_tracker' 
+                AND column_name = 'clothing_user_outer'
+            ) THEN
+                ALTER TABLE state_tracker ADD COLUMN clothing_user_outer TEXT;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'state_tracker' 
+                AND column_name = 'clothing_user_outer_bottom'
+            ) THEN
+                ALTER TABLE state_tracker ADD COLUMN clothing_user_outer_bottom TEXT;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'state_tracker' 
+                AND column_name = 'clothing_user_inner_bottom'
+            ) THEN
+                ALTER TABLE state_tracker ADD COLUMN clothing_user_inner_bottom TEXT;
+            END IF;
+
+        END $$;
     """)
 
-    await db.commit()
-    logger.info("✅ registrations created")
+    logger.info("✅ state_tracker columns fixed")
 
 
-async def create_working_memory_table(db):
-    await db.execute("DROP TABLE IF EXISTS working_memory")
+async def run_fix():
+    """Main runner"""
+    print("\n⚠ Ini akan memperbaiki schema database TANPA menghapus data")
+    confirm = input("Ketik 'FIX' untuk melanjutkan: ")
 
-    await db.execute("""
-        CREATE TABLE working_memory (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            registration_id TEXT,
-            user_message TEXT,
-            bot_response TEXT,
-            timestamp REAL
-        )
-    """)
+    if confirm != "FIX":
+        print("❌ Dibatalkan")
+        return
 
-    await db.commit()
-    logger.info("✅ working_memory created")
+    try:
+        db = await get_db()
 
+        # Fix columns
+        await fix_state_tracker_columns(db)
 
-async def create_long_term_memory_table(db):
-    await db.execute("DROP TABLE IF EXISTS long_term_memory")
+        logger.info("🎉 ALL FIXES COMPLETED")
 
-    await db.execute("""
-        CREATE TABLE long_term_memory (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            registration_id TEXT,
-            memory_type TEXT,
-            content TEXT,
-            importance REAL,
-            timestamp REAL,
-            status TEXT,
-            emotional_tag TEXT,
-            metadata TEXT
-        )
-    """)
-
-    await db.commit()
-    logger.info("✅ long_term_memory created")
+    except Exception as e:
+        logger.exception("❌ FIX FAILED")
+        raise
 
 
-async def create_state_tracker_table(db):
-    await db.execute("DROP TABLE IF EXISTS state_tracker")
-
-    await db.execute("""
-        CREATE TABLE state_tracker (
-            registration_id TEXT PRIMARY KEY,
-            location_bot TEXT,
-            location_user TEXT,
-            updated_at REAL
-        )
-    """)
-
-    await db.commit()
-    logger.info("✅ state_tracker created")
-
-
-async def run_migrations():
-    from database.connection import get_db
-
-    db = await get_db()
-
-    await create_registrations_table(db)
-    await create_working_memory_table(db)
-    await create_long_term_memory_table(db)
-    await create_state_tracker_table(db)
-
-    logger.info("🔥 ALL TABLES READY")
+if __name__ == "__main__":
+    asyncio.run(run_fix())
+```

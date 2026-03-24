@@ -67,7 +67,7 @@ class AIEngine:
         # ===== DYNAMICS =====
         from dynamics.emotional_flow import EmotionalFlow
         self.emotional_flow = EmotionalFlow(registration.role.value)
-        self.emotional_flow.primary_arousal = registration.bot.arousal if hasattr(registration.bot, 'arousal') else 0
+        self.emotional_flow.primary_arousal = self.bot.arousal
         
         from dynamics.spatial_awareness import SpatialAwareness
         self.spatial = SpatialAwareness()
@@ -138,9 +138,12 @@ class AIEngine:
         await self._update_state_from_message(user_message, state, intent_analysis)
         
         # ===== 4. UPDATE EMOTIONAL FLOW =====
+        # Ambil arousal user dari user object (bukan dari state)
+        user_arousal = self.user.arousal if hasattr(self.user, 'arousal') else 0
+        
         situasi = self._get_situasi(state)
         emotional_update = self.emotional_flow.update({
-            'user_arousal': state.arousal_user if state else 0,
+            'user_arousal': user_arousal,
             'user_message': user_message,
             'situasi': situasi,
             'trigger_reason': intent_analysis.get('primary_intent', 'chat'),
@@ -148,12 +151,8 @@ class AIEngine:
         })
         
         # Update bot state dengan emotional flow
-        if state:
-            state.arousal_bot = self.emotional_flow.primary_arousal
-            state.emotion_bot = self.emotional_flow.primary_state.value
-            if self.emotional_flow.secondary_state:
-                state.secondary_emotion = self.emotional_flow.secondary_state.value
-                state.secondary_arousal = self.emotional_flow.secondary_arousal
+        self.bot.arousal = self.emotional_flow.primary_arousal
+        self.bot.emotion = self.emotional_flow.primary_state.value
         
         # ===== 5. UPDATE SPATIAL AWARENESS =====
         spatial_update = self.spatial.parse(user_message)
@@ -173,7 +172,7 @@ class AIEngine:
         is_intimacy_request = intent_analysis.get('is_intimacy_request', False)
         
         if is_intimacy_request and self.registration.level >= 7:
-            if self.registration.stamina_bot >= 20 and self.registration.stamina_user >= 20:
+            if self.bot.stamina >= 20 and self.user.stamina >= 20:
                 if not self.registration.in_intimacy_cycle:
                     await self._start_intimacy_cycle()
         
@@ -184,8 +183,8 @@ class AIEngine:
         # ===== 10. UPDATE MOOD (Aftercare) =====
         if self.registration.in_intimacy_cycle and self.registration.level == 12:
             self.mood.update_from_aftercare(
-                self.registration.stamina_bot,
-                self.registration.stamina_user,
+                self.bot.stamina,
+                self.user.stamina,
                 self.intimacy_cycle.climax_count_this_cycle
             )
         
@@ -346,8 +345,8 @@ LANJUTAN RESPON:
     
     def _generate_gesture_from_state(self, state) -> str:
         """Generate gesture based on current state"""
-        arousal = self.emotional_flow.primary_arousal if self.emotional_flow else 0
-        mood = self.mood.current_mood.value if self.mood else "normal"
+        arousal = self.bot.arousal
+        mood = self.bot.mood if hasattr(self.bot, 'mood') else "normal"
         
         if arousal >= 70:
             gestures = [
@@ -380,8 +379,8 @@ LANJUTAN RESPON:
         state
     ) -> Optional[str]:
         """Generate inner thought (AI generated)"""
-        emotion = self.emotional_flow.primary_state.value if self.emotional_flow else "netral"
-        arousal = self.emotional_flow.primary_arousal if self.emotional_flow else 0
+        emotion = self.bot.emotion
+        arousal = self.bot.arousal
         
         inner_thought_prompt = f"""
 Buat SATU inner thought (pikiran dalam hati) untuk situasi ini:
@@ -424,7 +423,7 @@ USER: "{user_message[:100]}"
 BOT: "{bot_response[:100]}"
 
 Kondisi:
-- Emosi bot: {self.emotional_flow.primary_state.value if self.emotional_flow else 'netral'}
+- Emosi bot: {self.bot.emotion}
 - Level: {self.registration.level}
 - Role: {self.registration.role.value}
 - Total chat: {self.registration.total_chats}
@@ -584,8 +583,10 @@ Sixth sense (satu kalimat, mulai dengan 🔮):
         
         stamina = StaminaSystem()
         stamina.check_recovery()
-        self.registration.stamina_bot = stamina.bot_stamina.current
-        self.registration.stamina_user = stamina.user_stamina.current
+        
+        # Update stamina ke bot dan user object
+        self.bot.stamina = stamina.bot_stamina.current
+        self.user.stamina = stamina.user_stamina.current
     
     # =========================================================================
     # INTIMACY CYCLE METHODS
@@ -611,7 +612,7 @@ Sixth sense (satu kalimat, mulai dengan 🔮):
         climax_keywords = ['climax', 'come', 'keluar', 'habis', 'puas', 'puncak', 'climax']
         if any(k in user_message.lower() for k in climax_keywords):
             climax_result = cycle.record_climax()
-            self.registration.total_climax_bot += 1
+            self.bot.total_climax += 1
             logger.info(f"Climax recorded: #{climax_result['climax_count']}")
         
         # Save cycle state
@@ -703,8 +704,8 @@ Sixth sense (satu kalimat, mulai dengan 🔮):
             importance=importance,
             context={
                 'intent': intent.get('primary_intent'),
-                'arousal': self.emotional_flow.primary_arousal if self.emotional_flow else 0,
-                'emotion': self.emotional_flow.primary_state.value if self.emotional_flow else 'netral'
+                'arousal': self.bot.arousal,
+                'emotion': self.bot.emotion
             }
         )
         
@@ -747,9 +748,9 @@ Sixth sense (satu kalimat, mulai dengan 🔮):
             'registration_id': self.registration.id,
             'total_messages': self.registration.total_chats,
             'level': self.registration.level,
-            'arousal': self.emotional_flow.primary_arousal if self.emotional_flow else 0,
-            'stamina_bot': self.registration.stamina_bot,
-            'stamina_user': self.registration.stamina_user,
+            'arousal': self.bot.arousal,
+            'stamina_bot': self.bot.stamina,
+            'stamina_user': self.user.stamina,
             'in_intimacy_cycle': self.registration.in_intimacy_cycle,
             'last_response_time': self.state.get('last_response_time', 0)
         }

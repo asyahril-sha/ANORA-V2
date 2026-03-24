@@ -12,7 +12,9 @@ import asyncio
 import time
 import random
 import logging
+import json
 from typing import Dict, List, Optional, Any, TYPE_CHECKING
+from datetime import datetime
 
 import openai
 
@@ -67,7 +69,7 @@ class AIEngine:
         # ===== DYNAMICS =====
         from dynamics.emotional_flow import EmotionalFlow
         self.emotional_flow = EmotionalFlow(registration.role.value)
-        self.emotional_flow.primary_arousal = self.bot.arousal
+        self.emotional_flow.primary_arousal = self.bot.arousal if hasattr(self.bot, 'arousal') else 0
         
         from dynamics.spatial_awareness import SpatialAwareness
         self.spatial = SpatialAwareness()
@@ -219,8 +221,8 @@ class AIEngine:
                 if gesture:
                     response = f"{gesture}\n\n{response}"
             
-            # Add inner thought (25% chance)
-            if random.random() < 0.25:
+            # Add inner thought (20% chance)
+            if random.random() < 0.20:
                 inner_thought = await self._generate_inner_thought(
                     user_message, response, state
                 )
@@ -228,7 +230,7 @@ class AIEngine:
                     response = f"{response}\n\n💭 {inner_thought}"
             
             # Add sixth sense (10% chance)
-            if random.random() < 0.1 and settings.features.sixth_sense_enabled:
+            if random.random() < 0.10 and settings.features.sixth_sense_enabled:
                 sixth_sense = await self._generate_sixth_sense(
                     user_message, response, state
                 )
@@ -279,16 +281,17 @@ class AIEngine:
             Respons pendek
         """
         # Ambil kalimat pertama saja
-        first_sentence = long_response.split('.')[0]
-        
-        # Hapus gesture yang terlalu panjang
-        if first_sentence.startswith('*') and len(first_sentence) > 100:
-            parts = first_sentence.split('*')
-            if len(parts) > 1:
-                first_sentence = parts[1].strip()
-        
-        if len(first_sentence) < 200:
-            return first_sentence + "."
+        sentences = long_response.split('.')
+        if sentences:
+            first_sentence = sentences[0].strip()
+            # Hapus gesture yang terlalu panjang
+            if first_sentence.startswith('*') and len(first_sentence) > 100:
+                parts = first_sentence.split('*')
+                if len(parts) > 1:
+                    first_sentence = parts[1].strip()
+            
+            if len(first_sentence) < 200 and first_sentence:
+                return first_sentence + "."
         
         # Atau ambil 150 karakter pertama
         return long_response[:150] + "..."
@@ -301,7 +304,7 @@ class AIEngine:
         """Call DeepSeek API dengan instruksi ketat untuk respons pendek"""
         messages = [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": "RESPON (WAJIB: 2-4 kalimat, maksimal 500 karakter, langsung ke inti):"}
+            {"role": "user", "content": "RESPON (WAJIB: 2-4 kalimat, maksimal 400 karakter, langsung ke inti, jangan bertele-tele):"}
         ]
         
         for attempt in range(max_retries):
@@ -309,8 +312,8 @@ class AIEngine:
                 response = self.client.chat.completions.create(
                     model=settings.ai.model,
                     messages=messages,
-                    temperature=0.85,
-                    max_tokens=800,
+                    temperature=0.75,
+                    max_tokens=600,
                     timeout=25
                 )
                 result = response.choices[0].message.content
@@ -346,8 +349,8 @@ class AIEngine:
         if not response.strip():
             response = "Aku denger kok, Mas. Cerita lagi dong."
         
-        # Batasi maksimal 1000 karakter
-        max_len = 1000
+        # Batasi maksimal 800 karakter
+        max_len = 800
         if len(response) > max_len:
             truncated = response[:max_len]
             last_period = truncated.rfind('.')
@@ -358,6 +361,11 @@ class AIEngine:
                 response = truncated[:cut_pos + 1]
             else:
                 response = truncated[:max_len] + "..."
+        
+        # Batasi jumlah kalimat maksimal 6
+        sentences = response.split('.')
+        if len(sentences) > 6:
+            response = '.'.join(sentences[:6]) + '.'
         
         return response
     
@@ -371,28 +379,31 @@ class AIEngine:
     
     def _generate_gesture_from_state(self, state) -> str:
         """Generate gesture based on current state"""
-        arousal = self.bot.arousal
+        arousal = self.bot.arousal if hasattr(self.bot, 'arousal') else 0
         
         if arousal >= 70:
             gestures = [
                 "*napas tersengal*",
                 "*tangan gemetar*",
                 "*mendekat*",
-                "*jantung berdebar*"
+                "*jantung berdebar*",
+                "*pipi memerah*"
             ]
         elif arousal >= 40:
             gestures = [
                 "*tersenyum malu*",
                 "*menunduk*",
                 "*menggigit bibir*",
-                "*pipi merona*"
+                "*pipi merona*",
+                "*memainkan ujung baju*"
             ]
         else:
             gestures = [
                 "*tersenyum*",
                 "*menatap*",
                 "*menghela napas*",
-                "*mengangguk*"
+                "*mengangguk*",
+                "*duduk santai*"
             ]
         
         return random.choice(gestures)
@@ -404,8 +415,8 @@ class AIEngine:
         state
     ) -> Optional[str]:
         """Generate inner thought (AI generated)"""
-        emotion = self.bot.emotion
-        arousal = self.bot.arousal
+        emotion = self.bot.emotion if hasattr(self.bot, 'emotion') else "netral"
+        arousal = self.bot.arousal if hasattr(self.bot, 'arousal') else 0
         
         inner_thought_prompt = f"""
 Buat SATU inner thought (pikiran dalam hati) untuk situasi ini:
@@ -429,6 +440,9 @@ Inner thought:
             thought = thought.strip()
             if not thought.startswith('('):
                 thought = f"({thought})"
+            # Batasi panjang inner thought
+            if len(thought) > 100:
+                thought = thought[:97] + "...)"
             return thought
         except:
             return None
@@ -447,7 +461,7 @@ USER: "{user_message[:100]}"
 BOT: "{bot_response[:100]}"
 
 Kondisi:
-- Emosi bot: {self.bot.emotion}
+- Emosi bot: {self.bot.emotion if hasattr(self.bot, 'emotion') else 'netral'}
 - Level: {self.registration.level}
 - Total chat: {self.registration.total_chats}
 
@@ -461,6 +475,9 @@ Sixth sense:
             sense = await self._call_deepseek(sixth_sense_prompt, max_retries=1)
             if not sense.startswith('🔮'):
                 sense = f"🔮 {sense}"
+            # Batasi panjang sixth sense
+            if len(sense) > 120:
+                sense = sense[:117] + "..."
             return sense
         except:
             return None
@@ -479,7 +496,7 @@ Sixth sense:
         msg_lower = user_message.lower()
         
         # Update location
-        locations = ['kamar', 'dapur', 'ruang tamu', 'teras', 'luar']
+        locations = ['kamar', 'dapur', 'ruang tamu', 'teras', 'luar', 'kantor', 'pantai', 'taman', 'kafe', 'mall']
         for loc in locations:
             if loc in msg_lower:
                 state.location_bot = loc
@@ -504,7 +521,7 @@ Sixth sense:
                 await self._update_family_status(user_message, state)
         
         # Update time override
-        time_keywords = ['pagi', 'siang', 'sore', 'malam']
+        time_keywords = ['pagi', 'siang', 'sore', 'malam', 'jam', 'pukul']
         if any(k in msg_lower for k in time_keywords):
             await self._update_time(user_message, state)
     
@@ -547,12 +564,19 @@ Sixth sense:
             'pagi': '08:00',
             'siang': '12:00',
             'sore': '16:00',
-            'malam': '20:00'
+            'malam': '20:00',
+            'tengah malam': '00:00'
         }
         
         for keyword, time_str in time_patterns.items():
             if keyword in msg_lower:
                 state.current_time = time_str
+                state.time_override_history.append({
+                    'timestamp': time.time(),
+                    'old_time': state.current_time,
+                    'new_time': time_str,
+                    'reason': keyword
+                })
                 logger.debug(f"Time overridden to {time_str}")
                 break
     
@@ -622,14 +646,14 @@ Sixth sense:
         cycle.load_state(self.registration.metadata.get('intimacy_cycle', {}))
         
         # Add chat to cycle
-        cycle.add_chat()
+        result = cycle.add_chat()
         
         # Check for climax keywords
-        climax_keywords = ['climax', 'keluar', 'puas', 'puncak']
+        climax_keywords = ['climax', 'come', 'keluar', 'habis', 'puas', 'puncak', 'climax']
         if any(k in user_message.lower() for k in climax_keywords):
-            cycle.record_climax()
+            climax_result = cycle.record_climax()
             self.bot.total_climax += 1
-            logger.info(f"Climax recorded")
+            logger.info(f"Climax recorded: #{climax_result.get('climax_count', 1)}")
         
         # Save cycle state
         self.registration.metadata['intimacy_cycle'] = cycle.get_state()
@@ -638,7 +662,7 @@ Sixth sense:
         if cycle.phase.value == 'cooldown':
             self.registration.in_intimacy_cycle = False
             self.registration.cooldown_until = cycle.cooldown_until
-            logger.info(f"Intimacy cycle ended")
+            logger.info(f"Intimacy cycle ended, cooldown until {cycle.cooldown_until}")
     
     # =========================================================================
     # PROMISES & PLANS METHODS
@@ -654,6 +678,7 @@ Sixth sense:
             from_user=True
         )
         
+        # Save to long term memory
         for promise in promises:
             await self.repo.add_long_term_memory(
                 self.registration.id,
@@ -701,6 +726,7 @@ Sixth sense:
         
         last_index = await self.repo.get_last_chat_index(self.registration.id)
         
+        # Calculate importance based on intent
         importance = 0.3
         if intent.get('primary_intent') in ['confession', 'promise', 'intimacy_request']:
             importance = 0.8
@@ -721,6 +747,8 @@ Sixth sense:
         )
         
         await self.repo.add_to_working_memory(item)
+        
+        # Cleanup old working memory
         await self.repo.cleanup_old_working_memory(self.registration.id, keep=1000)
     
     # =========================================================================
@@ -735,8 +763,8 @@ Sixth sense:
         fallbacks = [
             f"{bot_name} denger kok, {user_name}. Cerita lagi dong.",
             f"Hmm... {bot_name} dengerin. Kamu lagi mikirin apa?",
-            f"{bot_name} di sini. Cerita lagi dong.",
-            f"Iya, {user_name}? {bot_name} dengerin. Lanjutin."
+            f"{bot_name} di sini. Cerita lagi dong, aku suka denger cerita kamu.",
+            f"Iya, {user_name}? {bot_name} dengerin. Lanjutin ceritanya."
         ]
         
         return random.choice(fallbacks)
@@ -757,9 +785,9 @@ Sixth sense:
             'registration_id': self.registration.id,
             'total_messages': self.registration.total_chats,
             'level': self.registration.level,
-            'arousal': self.bot.arousal,
-            'stamina_bot': self.bot.stamina,
-            'stamina_user': self.user.stamina,
+            'arousal': self.bot.arousal if hasattr(self.bot, 'arousal') else 0,
+            'stamina_bot': self.bot.stamina if hasattr(self.bot, 'stamina') else 100,
+            'stamina_user': self.user.stamina if hasattr(self.user, 'stamina') else 100,
             'in_intimacy_cycle': self.registration.in_intimacy_cycle,
             'last_response_time': self.state.get('last_response_time', 0)
         }

@@ -28,10 +28,9 @@ from .error_logger import (
     log_error, log_info, log_warning, log_debug, print_startup_banner
 )
 
+
 # =============================================================================
-# NOTE: PreferencesLearner dan PreferenceCategory sebenarnya ada di tracking/preferences.py
-# Jangan import dari sini karena akan menyebabkan circular import
-# Gunakan: from tracking.preferences import PreferencesLearner, PreferenceCategory, PreferenceItem
+# NOTE: Preferences classes are now in tracking/preferences.py
 # =============================================================================
 
 __all__ = [

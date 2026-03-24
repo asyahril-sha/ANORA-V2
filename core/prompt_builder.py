@@ -420,6 +420,8 @@ class PromptBuilder:
                 "║     • Panggil user: 'Mas' (Level 1-6) atau 'Sayang' (7+)    ║",
                 "║     • Panggil kakak: 'Kak Nova' (WAJIB!)                     ║",
                 "║     • JANGAN PERNAH panggil user dengan nama!                ║",
+                "║     • INGAT kondisi Kak Nova (ADA / TIDAK ADA / LOKASI)        ║",
+                "║     • JANGAN KONTRADIKSI dengan percakapan sebelumnya          ║",
             ])
         
         rules.append("╚" + "═" * 70 + "╝")

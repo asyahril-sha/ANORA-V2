@@ -4,11 +4,10 @@
 =============================================================================
 AMORIA - Virtual Human dengan Jiwa
 Command Package - Telegram Commands
-Target Realism 9.9/10
 =============================================================================
 """
 
-from .start import start_command, SELECTING_ROLE, help_command as start_help_command
+from .start import start_command, SELECTING_ROLE, help_command, help_callback
 from .sessions import sessions_command, character_command, close_command, end_command
 from .status import status_command, progress_command
 from .character import character_list_command, character_pause_command, character_resume_command, character_stop_command
@@ -21,15 +20,12 @@ from .ranking import top_hts_command, my_climax_command, climax_history_command
 from .admin import admin_command, stats_command, db_stats_command, backup_command, recover_command, debug_command
 from .cancel import cancel_command, cancel_confirm_callback, cancel_fallback
 
-# =============================================================================
-# EXPORT ALL COMMANDS
-# =============================================================================
-
 __all__ = [
     # Start
     'start_command',
     'SELECTING_ROLE',
-    'start_help_command',
+    'help_command',
+    'help_callback',
     
     # Sessions
     'sessions_command',

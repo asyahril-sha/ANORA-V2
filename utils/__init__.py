@@ -28,11 +28,6 @@ from .error_logger import (
     log_error, log_info, log_warning, log_debug, print_startup_banner
 )
 
-
-# =============================================================================
-# NOTE: Preferences classes are now in tracking/preferences.py
-# =============================================================================
-
 __all__ = [
     # Logger
     'setup_logging',

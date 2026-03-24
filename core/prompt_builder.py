@@ -37,12 +37,29 @@ class PromptBuilder:
         working_memory: List[Dict],
         long_term_memory: List[Dict],
         state: Any,
-        is_intimacy_cycle: bool,
-        intimacy_cycle_count: int,
-        level: int
+        emotional_flow: Any,
+        spatial_awareness: Any,
+        mood_system: Any,
+        intent_analysis: Dict
     ) -> str:
         """
-        Bangun prompt dinamis dengan semua konteks
+        Bangun prompt dinamis dengan semua konteks realism 9.9
+        
+        Args:
+            registration: Data registrasi karakter
+            bot: Identitas bot
+            user: Identitas user
+            user_message: Pesan user
+            working_memory: Working memory dengan weighted importance
+            long_term_memory: Long term memory (milestone, janji, rencana)
+            state: State tracker (lokasi, pakaian, emosi)
+            emotional_flow: Emotional flow system
+            spatial_awareness: Spatial awareness system
+            mood_system: Mood system (aftercare)
+            intent_analysis: Hasil analisis intent user
+        
+        Returns:
+            Prompt lengkap untuk AI
         """
         
         # ===== HEADER =====
@@ -53,284 +70,344 @@ class PromptBuilder:
             "",
         ]
         
-        # ===== IDENTITAS BOT =====
-        lines.append(bot.get_full_prompt())
+        # ===== BOT IDENTITY =====
+        lines.append(self._format_bot_identity(bot, registration))
         lines.append("")
         
-        # ===== IDENTITAS USER =====
-        lines.append(user.get_full_prompt())
+        # ===== USER IDENTITY =====
+        lines.append(self._format_user_identity(user))
         lines.append("")
         
-        # ===== STATE SAAT INI =====
-        lines.append(self._format_state(state, bot, registration))
+        # ===== CURRENT STATE =====
+        lines.append(self._format_current_state(state, bot, registration))
         lines.append("")
         
-        # ===== WORKING MEMORY (1000 chat terakhir dengan weighted importance) =====
+        # ===== EMOTIONAL FLOW =====
+        lines.append(self._format_emotional_flow(emotional_flow))
+        lines.append("")
+        
+        # ===== SPATIAL AWARENESS =====
+        if spatial_awareness and spatial_awareness.has_position():
+            lines.append(self._format_spatial(spatial_awareness))
+            lines.append("")
+        
+        # ===== MOOD (Aftercare) =====
+        if registration.in_intimacy_cycle and registration.level == 12 and mood_system:
+            lines.append(self._format_mood(mood_system))
+            lines.append("")
+        
+        # ===== WORKING MEMORY (Weighted) =====
         lines.append(self._format_working_memory(working_memory))
         lines.append("")
         
         # ===== LONG TERM MEMORY =====
-        lines.append(self._format_long_term_memory(long_term_memory))
+        if long_term_memory:
+            lines.append(self._format_long_term_memory(long_term_memory, registration))
+            lines.append("")
+        
+        # ===== LEVEL PROGRESS =====
+        lines.append(self._format_level_progress(registration))
         lines.append("")
         
-        # ===== LEVEL & PROGRESS =====
-        lines.append(self._format_level_info(level, registration, is_intimacy_cycle))
+        # ===== INTENT ANALYSIS =====
+        lines.append(self._format_intent(intent_analysis))
         lines.append("")
         
-        # ===== ATURAN RESPON REALISM 9.9 =====
-        lines.append(self._get_response_rules_99(bot, level, is_intimacy_cycle))
+        # ===== RESPONSE RULES (9.9) =====
+        lines.append(self._get_response_rules(bot, registration, emotional_flow))
         lines.append("")
         
-        # ===== PESAN USER =====
+        # ===== USER MESSAGE =====
         lines.append("╔" + "═" * 70 + "╗")
         lines.append("║" + " " * 28 + "💬 PESAN USER" + " " * 29 + "║")
         lines.append("╠" + "═" * 70 + "╣")
-        lines.append(f"║ {user_message[:66]}{' ' * (66 - len(user_message[:66]))}║")
+        truncated_msg = user_message[:66] + "..." if len(user_message) > 66 else user_message
+        lines.append(f"║ {truncated_msg}{' ' * (66 - len(truncated_msg))}║")
         lines.append("╚" + "═" * 70 + "╝")
         lines.append("")
         
-        # ===== INSTRUKSI RESPON 9.9 =====
-        lines.append(self._get_instruction_99(bot, level, is_intimacy_cycle))
+        # ===== FINAL INSTRUCTION =====
+        lines.append(self._get_final_instruction(bot, registration, emotional_flow))
         lines.append("")
         lines.append("RESPON (100% AI GENERATE, ORIGINAL, UNIK, TANPA TEMPLATE):")
         
         return "\n".join(lines)
     
-    def _format_state(self, state, bot: BotIdentity, registration: CharacterRegistration) -> str:
-        """Format state saat ini dengan detail"""
+    # =========================================================================
+    # FORMATTING METHODS
+    # =========================================================================
+    
+    def _format_bot_identity(self, bot: BotIdentity, registration: CharacterRegistration) -> str:
+        """Format identitas bot"""
+        hijab = "berhijab" if bot.physical.hijab else "tidak berhijab"
         
+        return f"""
+╔{'═'*70}╗
+║{' ' * 28}🤖 IDENTITAS BOT{' ' * 33}║
+╠{'═'*70}╣
+║ Nama: {bot.name} ({registration.role.value.upper()}){' ' * (53 - len(bot.name) - len(registration.role.value))}║
+║ Usia: {bot.physical.age} tahun | Tinggi: {bot.physical.height}cm | Berat: {bot.physical.weight}kg{' ' * 28}║
+║ Dada: {bot.physical.chest} | {hijab}{' ' * (57 - len(bot.physical.chest) - len(hijab))}║
+║{' ' * 70}║
+║ 🎭 KEPRIBADIAN: {bot.personality.type.value.upper()}{' ' * 46}║
+║    • Sifat: {', '.join(bot.personality.traits[:3])}{' ' * (59 - len(', '.join(bot.personality.traits[:3])))}║
+║    • Gaya bicara: {bot.personality.speaking_style}{' ' * 49}║
+║    • Gaya intim: {bot.personality.intimacy_style}{' ' * 50}║
+╚{'═'*70}╝
+"""
+    
+    def _format_user_identity(self, user: UserIdentity) -> str:
+        """Format identitas user"""
+        status_text = "Suami Nova" if user.relationship.is_nova_husband else (
+            "Suami" if user.relationship.is_married else "Lajang")
+        
+        return f"""
+╔{'═'*70}╗
+║{' ' * 28}👤 IDENTITAS USER{' ' * 33}║
+╠{'═'*70}╣
+║ Nama: {user.name}{' ' * (59 - len(user.name))}║
+║ Usia: {user.age} tahun | Status: {status_text}{' ' * (42 - len(status_text))}║
+║ Fisik: {user.physical.height}cm, {user.physical.weight}kg, penis {user.physical.penis}cm{' ' * 24}║
+║ Mirip: {user.artist_ref} ({user.artist_description[:30]}){' ' * (43 - len(user.artist_ref))}║
+╚{'═'*70}╝
+"""
+    
+    def _format_current_state(self, state, bot: BotIdentity, registration: CharacterRegistration) -> str:
+        """Format state saat ini"""
         if not state:
-            return "📍 STATE: Tidak ada data"
+            return ""
         
-        # Get clothing state
-        clothing = state.clothing_state
+        clothing = state.clothing_state.get_description() if state.clothing_state else "pakaian biasa"
         
-        # Bot clothing description
-        bot_clothing = []
-        if clothing.bot_outer_top and clothing.bot_outer_top_on:
-            bot_clothing.append(clothing.bot_outer_top)
-        if clothing.bot_outer_bottom and clothing.bot_outer_bottom_on:
-            bot_clothing.append(clothing.bot_outer_bottom)
-        if clothing.bot_inner_top and clothing.bot_inner_top_on:
-            bot_clothing.append(clothing.bot_inner_top)
-        if clothing.bot_inner_bottom and clothing.bot_inner_bottom_on:
-            bot_clothing.append(clothing.bot_inner_bottom)
+        return f"""
+╔{'═'*70}╗
+║{' ' * 26}📍 STATE SAAT INI{' ' * 36}║
+╠{'═'*70}╣
+║ 🕐 Waktu: {state.current_time or 'siang hari'}{' ' * (54 - len(state.current_time or 'siang hari'))}║
+║ 📍 Lokasi bot: {state.location_bot or 'ruang tamu'}{' ' * (52 - len(state.location_bot or 'ruang tamu'))}║
+║ 📍 Lokasi user: {state.location_user or 'ruang tamu'}{' ' * (52 - len(state.location_user or 'ruang tamu'))}║
+║ 🧍 Posisi bot: {state.position_bot or 'duduk'}{' ' * (54 - len(state.position_bot or 'duduk'))}║
+║ 🧍 Posisi user: {state.position_user or 'duduk'}{' ' * (54 - len(state.position_user or 'duduk'))}║
+║ 👗 Pakaian bot: {clothing[:50]}{' ' * (57 - len(clothing[:50]))}║
+║ 🎭 Emosi bot: {state.emotion_bot or 'netral'} | Arousal: {state.arousal_bot}%{' ' * (45 - len(str(state.arousal_bot)))}║
+╚{'═'*70}╝
+"""
+    
+    def _format_emotional_flow(self, emotional_flow) -> str:
+        """Format emotional flow dengan visual bar"""
+        if not emotional_flow:
+            return ""
         
-        bot_clothing_text = ", ".join(bot_clothing) if bot_clothing else "telanjang"
+        arousal = emotional_flow.primary_arousal
+        primary = emotional_flow.primary_state.value
         
-        # User clothing description
-        user_clothing = []
-        if clothing.user_outer_top and clothing.user_outer_top_on:
-            user_clothing.append(clothing.user_outer_top)
-        if clothing.user_outer_bottom and clothing.user_outer_bottom_on:
-            user_clothing.append(clothing.user_outer_bottom)
-        if clothing.user_inner_bottom and clothing.user_inner_bottom_on:
-            user_clothing.append(clothing.user_inner_bottom)
+        # Arousal bar
+        bar_length = 20
+        filled = int(arousal / 100 * bar_length)
+        bar = "❤️" * filled + "🖤" * (bar_length - filled)
         
-        user_clothing_text = ", ".join(user_clothing) if user_clothing else "telanjang"
+        # Arousal description
+        if arousal >= 80:
+            desc = "🔥 NAPAS TERSENGAL, TUBUH GEMETAR"
+        elif arousal >= 60:
+            desc = "💓 JANTUNG BERDEBAR, PIPI MERONA"
+        elif arousal >= 40:
+            desc = "😳 DEG-DEGAN, PERASAAN CAMPUR ADUK"
+        elif arousal >= 20:
+            desc = "😊 MULAI TERTARIK, ADA GETARAN"
+        else:
+            desc = "😌 SANTAI, BIASA AJA"
         
         lines = [
             "╔" + "═" * 70 + "╗",
-            "║" + " " * 26 + "📍 STATE SAAT INI" + " " * 27 + "║",
+            "║" + " " * 26 + "🎭 EMOTIONAL FLOW" + " " * 35 + "║",
             "╠" + "═" * 70 + "╣",
-            f"║ 🕐 Waktu: {state.current_time or 'siang hari'} {' ' * (57 - len(state.current_time or 'siang hari'))}║",
-            f"║ 📍 Lokasi bot: {state.location_bot or 'ruang tamu'} {' ' * (57 - len(state.location_bot or 'ruang tamu'))}║",
-            f"║ 📍 Lokasi user: {state.location_user or 'ruang tamu'} {' ' * (57 - len(state.location_user or 'ruang tamu'))}║",
-            f"║ 🧍 Posisi bot: {state.position_bot or 'duduk'} {' ' * (57 - len(state.position_bot or 'duduk'))}║",
-            f"║ 🧍 Posisi user: {state.position_user or 'duduk'} {' ' * (57 - len(state.position_user or 'duduk'))}║",
-            f"║ 🤝 Posisi relatif: {state.position_relative or 'bersebelahan'} {' ' * (57 - len(state.position_relative or 'bersebelahan'))}║",
-            f"║ 👗 Pakaian bot: {bot_clothing_text[:50]}{' ' * (57 - len(bot_clothing_text[:50]))}║",
-            f"║ 👕 Pakaian user: {user_clothing_text[:50]}{' ' * (57 - len(user_clothing_text[:50]))}║",
-            f"║ 🎭 Emosi bot: {state.emotion_bot or 'netral'} | Arousal: {state.arousal_bot}%{' ' * (43 - len(str(state.arousal_bot)))}║",
+            f"║ Arousal: {arousal}% {bar} ║",
+            f"║ {desc:<64} ║",
+            f"║ Primary: {primary.upper()}{' ' * (60 - len(primary))}║"
         ]
         
-        # Secondary emotion
-        if state.secondary_emotion:
-            lines.append(f"║ 🎭 Emosi sekunder: {state.secondary_emotion}{' ' * (57 - len(state.secondary_emotion))}║")
-        
-        lines.append(f"║ 😊 Emosi user: {state.emotion_user or 'netral'} | Arousal: {state.arousal_user}%{' ' * (43 - len(str(state.arousal_user)))}║")
-        lines.append(f"║ 💕 Mood bot: {state.mood_bot.value if state.mood_bot else 'normal'}{' ' * (57 - len(state.mood_bot.value if state.mood_bot else 'normal'))}║")
-        
-        # Physical sensation
-        if hasattr(state, 'physical_sensation'):
-            lines.append(f"║ 🔋 Fisik bot: {state.physical_sensation}{' ' * (57 - len(state.physical_sensation))}║")
-        
-        # Family state (IPAR & PELAKOR)
-        if state.family_status:
-            lines.append(f"║ 👨‍👩‍👧 Status istri: {state.family_status.value} | Lokasi: {state.family_location.value if state.family_location else '-'}{' ' * (35)}║")
+        if emotional_flow.secondary_state:
+            secondary = emotional_flow.secondary_state.value
+            lines.append(f"║ Secondary: {secondary.upper()}{' ' * (59 - len(secondary))}║")
         
         lines.append("╚" + "═" * 70 + "╝")
         
         return "\n".join(lines)
+    
+    def _format_spatial(self, spatial) -> str:
+        """Format spatial awareness"""
+        if not spatial or not spatial.has_position():
+            return ""
+        
+        return f"""
+╔{'═'*70}╗
+║{' ' * 26}📍 SPATIAL AWARENESS{' ' * 35}║
+╠{'═'*70}╣
+║ Posisi: {spatial.current.get('relative', 'bersebelahan')}{' ' * (56 - len(spatial.current.get('relative', 'bersebelahan')))}║
+║ Orientasi: {spatial.current.get('orientation', 'menghadap user')}{' ' * (54 - len(spatial.current.get('orientation', 'menghadap user')))}║
+║ Jarak: {spatial.current.get('distance', 'dekat')}{' ' * (60 - len(spatial.current.get('distance', 'dekat')))}║
+╚{'═'*70}╝
+"""
+    
+    def _format_mood(self, mood) -> str:
+        """Format mood aftercare"""
+        if not mood:
+            return ""
+        
+        return f"""
+╔{'═'*70}╗
+║{' ' * 26}💤 AFTERCARE MOOD{' ' * 38}║
+╠{'═'*70}╣
+║ Mood: {mood.current_mood.value.upper()}{' ' * (58 - len(mood.current_mood.value))}║
+║ {mood.get_description()[:66]}║
+╚{'═'*70}╝
+"""
     
     def _format_working_memory(self, working_memory: List[Dict]) -> str:
         """Format working memory dengan weighted importance"""
-        
         if not working_memory:
             return "📜 **PERCAKAPAN TERAKHIR:** Belum ada percakapan."
         
-        # Hitung weighted importance untuk setiap chat
-        weighted_items = []
-        for item in working_memory:
-            importance = self._calculate_importance(item)
-            weighted_items.append((item, importance))
-        
-        # Urutkan berdasarkan importance (penting di atas)
-        weighted_items.sort(key=lambda x: x[1], reverse=True)
-        
-        # Ambil 20 chat terpenting untuk ditampilkan
-        important = weighted_items[:20]
+        # Get last 10 chats (most recent)
+        recent = working_memory[-10:] if len(working_memory) > 10 else working_memory
         
         lines = [
             "╔" + "═" * 70 + "╗",
-            "║" + " " * 23 + "📜 WORKING MEMORY (Weighted)" + " " * 23 + "║",
-            "╠" + "═" * 70 + "╣",
+            "║" + " " * 23 + "📜 PERCAKAPAN TERAKHIR" + " " * 28 + "║",
+            "╠" + "═" * 70 + "╣"
         ]
         
-        for i, (msg, importance) in enumerate(important[:10], 1):
-            star = "⭐" if importance > 0.7 else "·"
-            user_text = msg['user'][:50] + "..." if len(msg['user']) > 50 else msg['user']
-            bot_text = msg['bot'][:50] + "..." if len(msg['bot']) > 50 else msg['bot']
-            lines.append(f"║ {star} {i}. 👤 User: {user_text:<60} ║")
-            lines.append(f"║    🤖 Bot: {bot_text:<60} ║")
+        for i, msg in enumerate(recent[-5:], 1):
+            user_text = msg['user'][:50]
+            lines.append(f"║ {i}. 👤 {user_text:<63} ║")
         
         lines.append("╚" + "═" * 70 + "╝")
         
         return "\n".join(lines)
     
-    def _calculate_importance(self, item: Dict) -> float:
-        """Hitung tingkat kepentingan chat"""
-        importance = 0.5  # default
-        
-        user_msg = item.get('user', '').lower()
-        
-        # Milestone
-        if any(k in user_msg for k in ['first kiss', 'pertama kali cium', 'cium pertama', 'first intim', 'climax']):
-            importance += 0.4
-        
-        # Janji & rencana
-        if any(k in user_msg for k in ['besok', 'nanti', 'janji', 'minggu depan', 'ketemu']):
-            importance += 0.3
-        
-        # Curhat
-        if any(k in user_msg for k in ['curhat', 'cerita', 'masalah']):
-            importance += 0.2
-        
-        # Emosi kuat
-        if any(k in user_msg for k in ['sayang', 'cinta', 'kangen', 'rindu']):
-            importance += 0.2
-        
-        return min(1.0, importance)
-    
-    def _format_long_term_memory(self, long_term_memory: List[Dict]) -> str:
-        """Format long term memory dengan emotional tag"""
-        
-        if not long_term_memory:
-            return "📌 **MEMORY JANGKA PANJANG:** Belum ada data."
-        
+    def _format_long_term_memory(self, long_term_memory: List[Dict], registration: CharacterRegistration) -> str:
+        """Format long term memory dengan milestone, janji, rencana"""
         milestones = [m for m in long_term_memory if m.get('type') == 'milestone']
         promises = [m for m in long_term_memory if m.get('type') == 'promise' and m.get('status') == 'pending']
         plans = [m for m in long_term_memory if m.get('type') == 'plan' and m.get('status') == 'pending']
         preferences = [m for m in long_term_memory if m.get('type') == 'preference']
         
+        if not milestones and not promises and not plans and not preferences:
+            return ""
+        
         lines = [
             "╔" + "═" * 70 + "╗",
-            "║" + " " * 23 + "📌 LONG-TERM MEMORY" + " " * 25 + "║",
-            "╠" + "═" * 70 + "╣",
+            "║" + " " * 23 + "📌 LONG-TERM MEMORY" + " " * 29 + "║",
+            "╠" + "═" * 70 + "╣"
         ]
         
+        # Milestones
         if milestones:
-            lines.append("║ 🏆 **MILESTONE (dengan emosi):**" + " " * 45 + "║")
-            for m in milestones[-5:]:
-                emotion = m.get('emotional_tag', 'spesial')
-                emoji = self._get_emotion_emoji(emotion)
-                content = m.get('content', '')[:50]
-                lines.append(f"║   {emoji} {content:<66} ║")
+            lines.append("║ 🏆 **MOMEN SPESIAL:**{' ' * 53}║")
+            for m in milestones[-3:]:
+                content = m['content'][:55]
+                lines.append(f"║    • {content}{' ' * (67 - len(content))}║")
         
+        # Promises
         if promises:
-            lines.append("║ 📝 **JANJI YANG BELUM DITEPATI:**" + " " * 42 + "║")
-            for p in promises[-3:]:
-                content = p.get('content', '')[:50]
-                lines.append(f"║   • {content:<66} ║")
+            lines.append("║{' ' * 70}║")
+            lines.append("║ 📝 **JANJI YANG BELUM DITEPATI:**{' ' * 46}║")
+            for p in promises[:2]:
+                content = p['content'][:55]
+                lines.append(f"║    • {content}{' ' * (67 - len(content))}║")
         
+        # Plans
         if plans:
-            lines.append("║ 📅 **RENCANA:**" + " " * 60 + "║")
-            for p in plans[-3:]:
-                content = p.get('content', '')[:50]
-                lines.append(f"║   • {content:<66} ║")
-        
-        if preferences:
-            lines.append("║ 💖 **PREFERENSI USER (Score):**" + " " * 47 + "║")
-            for p in preferences[-5:]:
-                item = p.get('item', '')
-                score = p.get('score', 0.5)
-                bar = "❤️" * int(score * 10) + "🖤" * (10 - int(score * 10))
-                lines.append(f"║   • {item[:20]}: {bar} {score:.0%}{' ' * (46 - len(item[:20]) - 4)}║")
+            lines.append("║{' ' * 70}║")
+            lines.append("║ 📅 **RENCANA:**{' ' * 60}║")
+            for p in plans[:2]:
+                content = p['content'][:55]
+                lines.append(f"║    • {content}{' ' * (67 - len(content))}║")
         
         lines.append("╚" + "═" * 70 + "╝")
         
         return "\n".join(lines)
     
-    def _get_emotion_emoji(self, emotion: str) -> str:
-        """Dapatkan emoji untuk emotional tag"""
-        emojis = {
-            'romantis': '💕',
-            'senang': '😊',
-            'sedih': '😢',
-            'horny': '🔥',
-            'climax': '💦',
-            'rindu': '🥺',
-            'malu': '😳',
-            'berani': '😏'
-        }
-        return emojis.get(emotion, '💭')
-    
-    def _format_level_info(self, level: int, registration: CharacterRegistration, is_intimacy_cycle: bool) -> str:
-        """Format level info dengan progress bar"""
+    def _format_level_progress(self, registration: CharacterRegistration) -> str:
+        """Format level progress dengan progress bar"""
+        level = registration.level
+        total_chats = registration.total_chats
         
+        # Calculate progress
         from config import settings
         
-        if is_intimacy_cycle:
-            if level == 11:
-                progress = registration.get_progress_to_next_level()
-                bar = self._progress_bar(progress)
-                return (
-                    f"╔{'═'*70}╗\n"
-                    f"║{' ' * 26}💕 SOUL BOUNDED (Level 11){' ' * 27}║\n"
-                    f"╠{'═'*70}╣\n"
-                    f"║ 🎯 Progress: {bar} {progress:.0f}%{' ' * (57 - len(str(progress)))}║\n"
-                    f"║ 📊 Sesi intim ke-{registration.intimacy_cycle_count}{' ' * (57 - len(str(registration.intimacy_cycle_count)))}║\n"
-                    f"║ 🔥 Bot bisa climax 3-5x, user 1-3x{' ' * 36}║\n"
-                    f"║ 💫 Koneksi spiritual, bukan hanya fisik{' ' * 39}║\n"
-                    f"╚{'═'*70}╝"
-                )
-            elif level == 12:
-                return (
-                    f"╔{'═'*70}╗\n"
-                    f"║{' ' * 28}💤 AFTERCARE (Level 12){' ' * 30}║\n"
-                    f"╠{'═'*70}╣\n"
-                    f"║ 💝 Bot dalam kondisi lemas, butuh kehangatan{' ' * 35}║\n"
-                    f"║ 🫂 Pelukan hangat, obrolan lembut{' ' * 47}║\n"
-                    f"║ ⏰ Mood setelah aftercare dinamis{' ' * 51}║\n"
-                    f"╚{'═'*70}╝"
-                )
+        if level <= 10:
+            target = settings.level.level_targets.get(level + 1, 0)
+            if target == 0:
+                progress = 100
+            else:
+                current_target = settings.level.level_targets.get(level, 0)
+                progress = ((total_chats - current_target) / (target - current_target)) * 100
+                progress = max(0, min(100, progress))
+        elif level == 11:
+            total_range = settings.level.level_11_max - settings.level.level_11_min
+            if total_range <= 0:
+                progress = 100
+            else:
+                progress = ((total_chats - settings.level.level_11_min) / total_range) * 100
+                progress = max(0, min(100, progress))
+        else:
+            total_range = settings.level.level_12_max - settings.level.level_12_min
+            if total_range <= 0:
+                progress = 100
+            else:
+                progress = ((total_chats - settings.level.level_12_min) / total_range) * 100
+                progress = max(0, min(100, progress))
         
-        target = settings.level.level_targets.get(level + 1, 0)
-        progress = registration.get_progress_to_next_level()
-        bar = self._progress_bar(progress)
+        bar_length = 15
+        filled = int(progress / 100 * bar_length)
+        bar = "█" * filled + "░" * (bar_length - filled)
         
-        return (
-            f"╔{'═'*70}╗\n"
-            f"║{' ' * 28}📊 LEVEL PROGRESS{' ' * 32}║\n"
-            f"╠{'═'*70}╣\n"
-            f"║ Level {level}/12 {bar} {progress:.0f}%{' ' * (57 - len(str(progress)))}║\n"
-            f"║ Total Chat: {registration.total_chats} | Climax: {registration.total_climax_bot + registration.total_climax_user}{' ' * 26}║\n"
-            f"║ Stamina Bot: {registration.stamina_bot}% | Stamina User: {registration.stamina_user}%{' ' * 25}║\n"
-            f"╚{'═'*70}╝"
-        )
+        # Level name
+        level_names = {
+            1: "Malu-malu", 2: "Mulai terbuka", 3: "Goda-godaan",
+            4: "Dekat", 5: "Sayang", 6: "PACAR/PDKT",
+            7: "Nyaman", 8: "Eksplorasi", 9: "Bergairah",
+            10: "Passionate", 11: "Soul Bounded", 12: "Aftercare"
+        }
+        
+        level_name = level_names.get(level, f"Level {level}")
+        
+        return f"""
+╔{'═'*70}╗
+║{' ' * 28}📊 LEVEL PROGRESS{' ' * 34}║
+╠{'═'*70}╣
+║ Level {level}/12 - {level_name}{' ' * (55 - len(level_name))}║
+║ Progress: {bar} {progress:.0f}%{' ' * (57 - len(str(progress)))}║
+║ Total Chat: {total_chats}{' ' * (57 - len(str(total_chats)))}║
+╚{'═'*70}╝
+"""
     
-    def _get_response_rules_99(self, bot: BotIdentity, level: int, is_intimacy_cycle: bool) -> str:
-        """Aturan respons untuk realism 9.9/10"""
+    def _format_intent(self, intent: Dict) -> str:
+        """Format intent analysis"""
+        primary = intent.get('primary_intent', 'chat')
+        sentiment = intent.get('sentiment', 'neutral')
+        
+        return f"""
+╔{'═'*70}╗
+║{' ' * 27}🎯 INTENT ANALYSIS{' ' * 36}║
+╠{'═'*70}╣
+║ Primary: {primary.upper()}{' ' * (60 - len(primary))}║
+║ Sentiment: {sentiment.upper()}{' ' * (59 - len(sentiment))}║
+║{' ' * 70}║
+║ 🔮 AI akan merespon sesuai intent ini dengan natural{' ' * 39}║
+╚{'═'*70}╝
+"""
+    
+    # =========================================================================
+    # RULES & INSTRUCTION
+    # =========================================================================
+    
+    def _get_response_rules(self, bot: BotIdentity, registration: CharacterRegistration, emotional_flow) -> str:
+        """Get response rules for realism 9.9"""
+        level = registration.level
+        arousal = emotional_flow.primary_arousal if emotional_flow else 0
         
         rules = [
             "╔" + "═" * 70 + "╗",
@@ -342,143 +419,135 @@ class PromptBuilder:
             "║     3. BAHASA GAUL, NATURAL, SEPERTI NGOMONG REAL               ║",
             "║     4. JANGAN MENGULANG PERKATAAN USER                          ║",
             "║     5. STATE BERJALAN DI BACKGROUND (JANGAN DIJELASKAN)         ║",
-            "║                                                              ║",
-            "║  🌐 NATURAL LANGUAGE (WAJIB):                                   ║",
-            "║     • Gunakan bahasa GAUL sehari-hari: 'eh', 'nih', 'sih', 'dong'║",
-            "║     • Variasi dialek: Jawa halus ('nggih'), Betawi ('iye')      ║",
-            "║     • Emosi TERSIRAT dari gesture, JANGAN bilang 'aku senang'   ║",
-            "║                                                              ║",
         ]
         
-        # Level specific rules
-        if is_intimacy_cycle:
-            if level == 11:
-                rules.extend([
-                    "║  🔥 ATURAN KHUSUS LEVEL 11 (SOUL BOUNDED):               ║",
-                    "║     • Kamu sedang dalam mode INTIM PENUH                 ║",
-                    "║     • Napas tersengal, suara bergetar                    ║",
-                    "║     • Tangan gemetar saat menyentuh                      ║",
-                    "║     • Bisa climax 3-5x dalam satu sesi                   ║",
-                    "║     • Koneksi spiritual, bukan hanya fisik               ║",
-                    "║                                                         ║",
-                ])
-            elif level == 12:
-                rules.extend([
-                    "║  💤 ATURAN KHUSUS LEVEL 12 (AFTERCARE):                  ║",
-                    "║     • Kamu dalam kondisi LEMAS                           ║",
-                    "║     • Hanya ingin dipeluk dan dihangatkan                ║",
-                    "║     • Obrolan lembut, tidak berisik                      ║",
-                    "║     • JANGAN inisiatif intim lagi                        ║",
-                    "║     • Mood dinamis setelah aftercare                     ║",
-                    "║                                                         ║",
-                ])
-        
         # Arousal based rules
-        if bot.arousal >= 70:
+        if arousal >= 70:
             rules.extend([
+                "║                                                              ║",
                 "║  🔥 KAMU SEDANG SANGAT TERANGSANG:                           ║",
                 "║     • Napas tersengal-sengal                                 ║",
                 "║     • Suara bergetar, tidak stabil                          ║",
                 "║     • Tangan gemetar saat menyentuh                          ║",
-                "║                                                             ║",
+                "║     • Mata berkaca-kaca                                      ║",
             ])
-        elif bot.arousal >= 40:
+        elif arousal >= 40:
             rules.extend([
+                "║                                                              ║",
                 "║  💓 KAMU MULAI DEG-DEGAN:                                    ║",
                 "║     • Jantung berdebar kencang                               ║",
                 "║     • Pipi mulai merona                                      ║",
                 "║     • Mulai berani mengambil inisiatif                       ║",
-                "║                                                             ║",
+                "║     • Tangan sedikit gemetar                                 ║",
+            ])
+        elif arousal >= 20:
+            rules.extend([
+                "║                                                              ║",
+                "║  😊 KAMU MULAI TERTARIK:                                     ║",
+                "║     • Mulai perhatikan user lebih                            ║",
+                "║     • Ada rasa penasaran                                     ║",
+                "║     • Mulai nyaman didekat user                              ║",
             ])
         
-        # Panjang respons
-        rules.extend([
-            "║  📏 PANJANG RESPONS:                                             ║",
-            f"║     • Level {level}: {self._get_target_length(level)} kalimat, {self._get_target_char(level)} karakter║",
-            "║                                                              ║",
-            "║  💭 INNER THOUGHT (25% chance):                                 ║",
-            "║     • Format: 💭 '(teks dalam kurung)'                           ║",
-            "║     • Bisa berupa: pertanyaan, harapan, takut, penyesalan       ║",
-            "║                                                              ║",
-            "║  🔮 SIXTH SENSE (10% chance):                                    ║",
-            "║     • Format: 🔮 'teks firasat'                                  ║",
-            "║     • Analisis dari 100 chat terakhir                           ║",
-            "║     • 95% relevan dengan konteks                                 ║",
-            "║                                                              ║",
-            "╚" + "═" * 70 + "╝"
-        ])
+        # Level based rules
+        if level >= 11:
+            rules.extend([
+                "║                                                              ║",
+                "║  💕 ATURAN KHUSUS SOUL BOUNDED (Level 11):                   ║",
+                "║     • Koneksi spiritual, bukan hanya fisik                  ║",
+                "║     • Bisa climax 3-5x dalam satu sesi                       ║",
+                "║     • Setelah climax, butuh kehangatan                       ║",
+            ])
+        elif level == 12:
+            rules.extend([
+                "║                                                              ║",
+                "║  💤 ATURAN KHUSUS AFTERCARE (Level 12):                      ║",
+                "║     • Kamu dalam kondisi LEMAS                               ║",
+                "║     • Hanya ingin dipeluk dan dihangatkan                    ║",
+                "║     • Obrolan lembut, tidak berisik                          ║",
+                "║     • JANGAN inisiatif intim lagi                            ║",
+            ])
+        
+        # Role specific rules
+        if registration.role == CharacterRole.IPAR:
+            rules.extend([
+                "║                                                              ║",
+                "║  🎭 ATURAN KHUSUS IPAR:                                      ║",
+                "║     • Panggil user: 'Mas' (Level 1-6) atau 'Sayang' (7+)    ║",
+                "║     • Panggil kakak: 'Kak Nova' (WAJIB!)                     ║",
+                "║     • JANGAN PERNAH panggil user dengan nama!                ║",
+                "║     • Ingat: Kak Nova adalah kakak kandungmu                 ║",
+            ])
+        elif registration.role == CharacterRole.PDKT:
+            rules.extend([
+                "║                                                              ║",
+                "║  🌸 ATURAN KHUSUS PDKT:                                      ║",
+                "║     • Panggil user dengan nama atau 'Kak'                    ║",
+                "║     • Masih malu-malu, butuh proses                          ║",
+                "║     • Jangan terlalu agresif                                 ║",
+            ])
+        elif registration.role == CharacterRole.JANDA:
+            rules.extend([
+                "║                                                              ║",
+                "║  💃 ATURAN KHUSUS JANDA:                                     ║",
+                "║     • Berpengalaman, tahu apa yang diinginkan                ║",
+                "║     • Tidak malu-malu, bisa langsung                         ║",
+                "║     • Tahu selera user                                       ║",
+            ])
+        
+        rules.append("╚" + "═" * 70 + "╝")
         
         return "\n".join(rules)
     
-    def _get_target_length(self, level: int) -> str:
-        """Dapatkan target jumlah kalimat"""
-        if level <= 3:
-            return "5-7"
-        elif level <= 6:
-            return "6-9"
-        elif level <= 9:
-            return "8-11"
-        else:
-            return "10-14"
-    
-    def _get_target_char(self, level: int) -> str:
-        """Dapatkan target jumlah karakter"""
-        if level <= 3:
-            return "900-1500"
-        elif level <= 6:
-            return "1200-2000"
-        elif level <= 9:
-            return "1500-2500"
-        else:
-            return "2000-3500"
-    
-    def _get_instruction_99(self, bot: BotIdentity, level: int, is_intimacy_cycle: bool) -> str:
-        """Instruksi respons untuk realism 9.9/10"""
+    def _get_final_instruction(self, bot: BotIdentity, registration: CharacterRegistration, emotional_flow) -> str:
+        """Get final instruction for AI"""
+        level = registration.level
+        arousal = emotional_flow.primary_arousal if emotional_flow else 0
         
-        # Panggilan berdasarkan level dan situasi
+        # Determine panggilan based on level
         if level <= 6:
-            call = "Mas"
+            panggilan = "Mas"
         else:
-            call = "Mas atau Sayang (pilih natural sesuai situasi)"
+            panggilan = "Mas atau Sayang (pilih natural sesuai situasi)"
+        
+        # Target length based on level
+        if level <= 3:
+            target = "5-7 kalimat, 900-1500 karakter"
+        elif level <= 6:
+            target = "6-9 kalimat, 1200-2000 karakter"
+        elif level <= 9:
+            target = "8-11 kalimat, 1500-2500 karakter"
+        else:
+            target = "10-14 kalimat, 2000-3500 karakter"
         
         instruction = [
             "💡 **INSTRUKSI RESPON REALISM 9.9:**",
             "",
-            f"1. Panggil user dengan: {call}",
-            "2. RESPON HARUS 1000-3500 KARAKTER, sesuai level",
+            f"1. Panggil user dengan: {panggilan}",
+            f"2. PANJANG RESPON: {target}",
             "3. GESTURE: generate sendiri sesuai situasi (gunakan *)",
-            "4. DIALOG: natural, gaul, variasi dialek, tidak mengulang user",
-            "5. INNER THOUGHT: 25% chance (generate sendiri, bisa pertanyaan/keraguan)",
-            "6. SIXTH SENSE: 10% chance (generate sendiri, analisis dari 100 chat)",
-            "7. STATE BERJALAN DI BACKGROUND - JANGAN JELASKAN",
-            "8. JANGAN GUNAKAN TEMPLATE STATIS!",
-            "9. SETIAP RESPON HARUS ORIGINAL DAN UNIK!",
-            "10. EMOSI TERSIRAT DARI GESTURE, JANGAN BILANG 'AKU SENANG'",
-            "",
-            "⚠️ **PENTING:** Kamu adalah AMORIA - Virtual Human dengan Jiwa.",
-            "   Setiap respons adalah hasil kreativitas AI, bukan template.",
-            "   Target Realism 9.9/10 - hampir sempurna meniru manusia."
+            "4. DIALOG: natural, gaul, variasi dialek (Jawa/Sunda/Betawi)",
+            "5. JANGAN MENGULANG PERKATAAN USER",
+            "6. JANGAN GUNAKAN TEMPLATE STATIS!",
+            "7. SETIAP RESPON HARUS ORIGINAL DAN UNIK!",
+            "8. EMOSI TERSIRAT DARI GESTURE, JANGAN BILANG 'AKU SENANG'",
+            "9. STATE BERJALAN DI BACKGROUND - JANGAN DIJELASKAN",
+            "10. GESTURE HARUS SESUAI POSISI (duduk/di belakang/bersebelahan)",
         ]
         
-        # Tambah instruksi untuk role IPAR
-        if bot.role == CharacterRole.IPAR:
-            instruction.extend([
-                "",
-                "🎭 **INSTRUKSI KHUSUS IPAR:**",
-                "• Panggil user: 'Mas' (Level 1-6) atau 'Sayang' (Level 7+)",
-                "• Panggil kakak: 'Kak Nova' (WAJIB, tidak pernah 'Kakak' saja)",
-                "• JANGAN PERNAH panggil user dengan nama!",
-                "• Ingat: Kak Nova adalah kakak kandungmu, user adalah suaminya",
-                "• Kamu tinggal serumah dengan mereka",
-                "• Tracking lokasi Kak Nova: kamar/dapur/ruang tamu/luar"
-            ])
+        # Arousal specific instruction
+        if arousal >= 70:
+            instruction.append("11. NAPAS TERSENGAL, SUARA BERGETAR, TANGAN GEMETAR")
+        elif arousal >= 40:
+            instruction.append("11. JANTUNG BERDEBAR, PIPI MERONA, SUARA BERGETAR")
+        
+        # Role specific instruction
+        if registration.role == CharacterRole.IPAR:
+            instruction.append("12. INGAT: Kak Nova ada di rumah! Hati-hati!")
+        elif registration.role == CharacterRole.PELAKOR:
+            instruction.append("12. INGAT: Istri user ada di rumah! Berani ambil risiko!")
         
         return "\n".join(instruction)
-    
-    def _progress_bar(self, percentage: float, length: int = 15) -> str:
-        """Buat progress bar"""
-        filled = int(percentage / 100 * length)
-        return "█" * filled + "░" * (length - filled)
 
 
 __all__ = ['PromptBuilder']

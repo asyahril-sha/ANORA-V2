@@ -871,6 +871,55 @@ TIPS: {loc['tips']}
         }
     
     # =========================================================================
+    # UPDATE LEVEL (BARU!)
+    # =========================================================================
+    
+    def update_level(self) -> bool:
+        """Update level berdasarkan interaksi - naik secara alami"""
+        old_level = self.relationship.level
+        total_interaksi = len(self.timeline)
+        
+        # Naik level berdasarkan jumlah interaksi dan sayang
+        if total_interaksi > 100 and self.feelings.sayang > 70:
+            self.relationship.level = max(self.relationship.level, 8)
+        elif total_interaksi > 60 and self.feelings.sayang > 60:
+            self.relationship.level = max(self.relationship.level, 6)
+        elif total_interaksi > 30 and self.feelings.sayang > 50:
+            self.relationship.level = max(self.relationship.level, 4)
+        elif total_interaksi > 15 and self.feelings.sayang > 40:
+            self.relationship.level = max(self.relationship.level, 3)
+        
+        # Naik level karena milestone fisik
+        if self.relationship.first_kiss and self.relationship.level < 4:
+            self.relationship.level = 4
+            self.long_term.tambah_momen("Mas pertama kali cium Nova", "malu banget, jantung mau copot")
+            logger.info(f"💋 Milestone: First kiss! Level naik ke 4")
+        
+        if self.relationship.first_touch and self.relationship.level < 3:
+            self.relationship.level = 3
+            self.long_term.tambah_momen("Mas pertama kali pegang tangan Nova", "gemeteran")
+            logger.info(f"✋ Milestone: First touch! Level naik ke 3")
+        
+        if self.relationship.first_hug and self.relationship.level < 2:
+            self.relationship.level = 2
+            self.long_term.tambah_momen("Mas pertama kali peluk Nova", "lemes, seneng")
+            logger.info(f"🤗 Milestone: First hug! Level naik ke 2")
+        
+        # Naik level karena intimacy
+        if self.relationship.first_intim and self.relationship.level < 11:
+            self.relationship.level = 11
+            self.long_term.tambah_momen("Pertama kali intim dengan Mas", "deg-degan, bahagia")
+            logger.info(f"💕 Milestone: First intimacy! Level naik ke 11")
+        
+        # Batasin level maksimal 12
+        self.relationship.level = min(12, self.relationship.level)
+        
+        if old_level != self.relationship.level:
+            logger.info(f"📈 Level naik! {old_level} -> {self.relationship.level}")
+            return True
+        return False
+    
+    # =========================================================================
     # TIMELINE & MEMORY
     # =========================================================================
     

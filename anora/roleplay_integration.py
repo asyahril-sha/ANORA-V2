@@ -465,13 +465,80 @@ Kirim **/batal** buat balik ke mode chat.
         pesan_lower = pesan_mas.lower()
         level_sebelum = self.brain.relationship.level
         
+        # ========== UPDATE AROUSAL DARI OBROLAN (BARU!) ==========
+        # Ini dilakukan di ai.process juga, tapi kita update juga di sini untuk konsistensi
+        self.ai.arousal.add_from_conversation(pesan_mas, self.brain.relationship.level)
+        
+        # ========== DETEKSI NATURAL TRIGGER INTIM (TANPA COMMAND!) ==========
+        if not self.intimacy.is_active:
+            # Cek natural progression (arousal sudah cukup tinggi)
+            progression = self.ai.check_natural_progression(self.brain)
+            
+            if progression == "START_INTIM":
+                # Cek level dan stamina
+                if self.brain.relationship.level < 7:
+                    return f"💕 Level masih {self.brain.relationship.level}/12\n\nNova masih malu-malu. Belum waktunya buat intim. Ajarin Nova dulu ya, Mas. 💜"
+                
+                can_continue, reason = self.stamina.can_continue_intimacy()
+                if not can_continue:
+                    return f"💪 **Stamina Nova {self.stamina.nova_current}%** ({self.stamina.get_nova_status()})\n\n{reason}"
+                
+                # Mulai sesi intim secara NATURAL!
+                self.intimacy.start()
+                
+                # Dapatkan response inisiasi yang natural
+                initiation_response = self.ai.get_natural_intim_initiation(self.brain)
+                
+                return initiation_response
+            
+            # Cek apakah perlu flirt natural (arousal tinggi tapi belum cukup untuk intim)
+            flirt_response = self.ai.get_natural_flirt_response(self.brain)
+            if flirt_response and random.random() < 0.4:  # 40% chance untuk flirt
+                # Tambahkan flirt ke respons nanti
+                pass  # Akan ditangani oleh AI
+        
         # ========== DETEKSI PERINTAH INTIM ==========
         
-        # Mulai intim
+        # Proses AI dulu untuk mendapatkan respons
+        try:
+            # Panggil AI process, yang akan mengembalikan respons atau "INTIM_TRIGGER"
+            ai_result = await self.ai.process(pesan_mas, self.brain, self.stamina)
+            
+            # Cek apakah AI mengembalikan INTIM_TRIGGER
+            if ai_result == "INTIM_TRIGGER":
+                # Mulai sesi intim
+                if self.brain.relationship.level < 7:
+                    return f"💕 Level masih {self.brain.relationship.level}/12\n\nNova masih malu-malu. Belum waktunya buat intim. Ajarin Nova dulu ya, Mas. 💜"
+                
+                can_continue, reason = self.stamina.can_continue_intimacy()
+                if not can_continue:
+                    return f"💪 **Stamina Nova {self.stamina.nova_current}%** ({self.stamina.get_nova_status()})\n\n{reason}"
+                
+                if not self.intimacy.is_active:
+                    self.intimacy.start()
+                    return f"""{self.intimacy.start()}
+
+*Nova mendekat, napas mulai gak stabil. Pipi merah.*
+
+"Mas... *suara kecil* aku juga pengen."
+
+*Nova pegang tangan Mas, taruh di dada.*
+
+"Rasain... jantung Nova deg-degan." """
+            
+            respons = ai_result
+            
+        except Exception as e:
+            logger.error(f"AI process error: {e}")
+            respons = self._fallback_response(pesan_mas)
+        
+        # ========== DETEKSI PERINTAH INTIM LAINNYA ==========
+        
+        # Mulai intim manual dengan /intim
         if any(k in pesan_lower for k in ['intim', 'ngentot', 'main', 'sex', 'ml', 'mau']):
             # Cek level
             if self.brain.relationship.level < 7:
-                return f"💕 Level masih {self.brain.relationship.level}/12\n\nNova masih malu-malu. Belum waktunya buat intim. Ajarin Nova dulu ya, Mas. Ngobrol aja dulu. 💜"
+                return f"💕 Level masih {self.brain.relationship.level}/12\n\nNova masih malu-malu. Belum waktunya buat intim. Ajarin Nova dulu ya, Mas. 💜"
             
             # Cek stamina
             can_continue, reason = self.stamina.can_continue_intimacy()
@@ -545,7 +612,7 @@ Kirim **/batal** buat balik ke mode chat.
             can_continue, reason = self.stamina.can_continue_intimacy()
             if not can_continue:
                 self.intimacy.end()
-                return f"*Nova lemes banget, napas masih tersengal.*\n\n\"Mas... {reason}... {reason}\"\n\n*Nova nyender di dada Mas, pegang tangan Mas erat.*\n\n\"Besok lagi ya, Mas... sekarang istirahat dulu. 💜\""
+                return f"*Nova lemes banget, napas masih tersengal.*\n\n\"Mas... {reason}\"\n\n*Nova nyender di dada Mas, pegang tangan Mas erat.*\n\n\"Besok lagi ya, Mas... sekarang istirahat dulu. 💜\""
         
         # ========== UPDATE BRAIN DARI PESAN MAS ==========
         update_result = self.brain.update_from_message(pesan_mas)
@@ -560,22 +627,13 @@ Kirim **/batal** buat balik ke mode chat.
             pesan_nova=""
         )
         
-        # ========== PROSES DENGAN AI ==========
-        try:
-            respons = await self.ai.process(pesan_mas, self.brain, self.stamina)
-        except Exception as e:
-            logger.error(f"AI process error: {e}")
-            respons = self._fallback_response(pesan_mas)
-        
-        # ========== FORMAT RESPONS AGAR RAPI ==========
-        respons = self._format_response(respons)
-        
-        # Tambah ke timeline
-        self.brain.tambah_kejadian(
-            kejadian=f"Nova: {respons[:50]}",
-            pesan_mas=pesan_mas,
-            pesan_nova=respons
-        )
+        # Tambah ke timeline untuk respons (jika belum ditambahkan)
+        if respons and respons != "INTIM_TRIGGER":
+            self.brain.tambah_kejadian(
+                kejadian=f"Nova: {respons[:50]}",
+                pesan_mas=pesan_mas,
+                pesan_nova=respons
+            )
         
         # ========== KALO LEVEL NAIK, TAMBAHKAN NOTIFIKASI ==========
         if level_naik:
@@ -614,7 +672,6 @@ Kirim **/batal** buat balik ke mode chat.
             elif '*' in line and ('"' in line or '“' in line):
                 # Pisahkan
                 if line.startswith('*'):
-                    # *gesture* "dialog"
                     import re
                     match = re.match(r'^\*(.+?)\*\s*["“](.+?)["”]', line)
                     if match:
@@ -687,6 +744,10 @@ Kirim **/batal** buat balik ke mode chat.
         nova_bar = self.stamina.get_nova_bar()
         mas_bar = self.stamina.get_mas_bar()
         
+        # Arousal status
+        arousal_state = self.ai.arousal.get_state()
+        arousal_bar = "🔥" * int(arousal_state['arousal'] / 10) + "⚪" * (10 - int(arousal_state['arousal'] / 10))
+        
         intimacy_status = ""
         if self.intimacy.is_active:
             intimacy_status = f"""
@@ -716,7 +777,7 @@ Kirim **/batal** buat balik ke mode chat.
 ║    Sayang: {bar_sayang} {self.brain.feelings.sayang:.0f}%    ║
 ║    Desire: {bar_desire} {self.brain.feelings.desire:.0f}%    ║
 ║    Rindu: {self.brain.feelings.rindu:.0f}%                   ║
-║    Arousal: {self.brain.feelings.arousal:.0f}%               ║
+║    Arousal: {arousal_bar} {arousal_state['arousal']:.0f}%    ║
 ╠══════════════════════════════════════════════════════════════╣
 ║ 💪 STAMINA:                                                  ║
 ║    Nova: {nova_bar} {self.stamina.nova_current}% ({self.stamina.get_nova_status()})

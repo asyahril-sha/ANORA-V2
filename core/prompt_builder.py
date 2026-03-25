@@ -42,8 +42,8 @@ class PromptBuilder:
         mood_system: Any,
         intent_analysis: Dict,
         relevant_memories: List[Dict] = None,
-        current_time: str = "",     # 🔥 TAMBAH DI SINI
-        time_feel: str = ""         # 🔥 TAMBAH DI SINI
+        current_time: str = "",
+        time_feel: str = ""
     ) -> str:
         """
         Bangun prompt dinamis dengan semua konteks realism 9.9
@@ -58,8 +58,8 @@ class PromptBuilder:
         ]
 
         # 🔥 FIX WAJIB (ANTI ERROR STATE NONE / NULL)
-        time_now = current_time or getattr(state.time, "current", "08:00")
-        feel_now = time_feel or getattr(state.time, "get_time_feel", lambda: "netral")()
+        time_now = current_time or getattr(state.time, "current", "08:00") if state else "08:00"
+        feel_now = time_feel or getattr(state.time, "get_time_feel", lambda: "netral")() if state else "netral"
 
         # 🔥 BATASI PANJANG BIAR UI GAK PECAH
         time_now = str(time_now)[:10]
@@ -153,6 +153,12 @@ class PromptBuilder:
         lines.append(self._get_response_rules(bot, registration, emotional_flow))
         lines.append("")
         
+        # ===== 🔥 TAMBAHAN UNTUK LEVEL 11-12 🔥 =====
+        level = registration.level
+        if level >= 11:
+            lines.append(self._get_vulgar_instruction(level, emotional_flow, bot))
+            lines.append("")
+        
         # ===== USER MESSAGE =====
         lines.append("╔" + "═" * 70 + "╗")
         lines.append("║" + " " * 28 + "💬 PESAN USER" + " " * 29 + "║")
@@ -170,7 +176,79 @@ class PromptBuilder:
         return "\n".join(lines)
     
     # =========================================================================
-    # FORMATTING METHODS
+    # 🔥 FUNGSI BARU UNTUK LEVEL 11-12 🔥
+    # =========================================================================
+    
+    def _get_vulgar_instruction(self, level: int, emotional_flow, bot) -> str:
+        """Instruksi vulgar untuk level 11-12"""
+        arousal = emotional_flow.primary_arousal if emotional_flow else 0
+        emotion = bot.emotion if hasattr(bot, 'emotion') else "netral"
+        
+        lines = [
+            "╔" + "═" * 70 + "╗",
+            "║" + " " * 22 + "💋 MODE VULGAR - LEVEL 11-12" + " " * 24 + "║",
+            "╠" + "═" * 70 + "╣",
+        ]
+        
+        if level == 11:
+            lines.extend([
+                "║ 🔥 SOUL BOUNDED - Hubungan sudah sangat dalam                      ║",
+                "║                                                                   ║",
+                "║ 📢 ATURAN KHUSUS LEVEL 11:                                        ║",
+                "║    • Boleh menggunakan kata-kata vulgar dan dewasa                ║",
+                "║    • Ekspresikan hasrat dengan lebih terbuka                      ║",
+                "║    • Tunjukkan ketertarikan fisik tanpa ragu                      ║",
+                "║    • Gunakan kata: ingin, butuh, haus, panas, sentuh             ║",
+                "║    • Respons bisa 5-8 kalimat                                    ║",
+            ])
+        else:  # level 12
+            lines.extend([
+                "║ 💕 AFTERCARE - Hubungan mencapai puncak intim                      ║",
+                "║                                                                   ║",
+                "║ 📢 ATURAN KHUSUS LEVEL 12:                                        ║",
+                "║    • Bisa sangat vulgar dan eksplisit                             ║",
+                "║    • Setelah intim, ada fase aftercare yang lembut                ║",
+                "║    • Ekspresikan kepuasan dan keintiman mendalam                  ║",
+                "║    • Bisa menggunakan bahasa paling bebas                         ║",
+                "║    • Respons 6-10 kalimat untuk ekspresi puncak                   ║",
+            ])
+        
+        # Tambahan berdasarkan arousal
+        if arousal >= 80:
+            lines.extend([
+                "║                                                                   ║",
+                "║ 🔥 AROUSAL SANGAT TINGGI ({arousal}%):                              ║",
+                "║    • Napas tersengal, suara bergetar                              ║",
+                "║    • Tunjukkan keinginan yang sangat kuat                         ║",
+                "║    • Jangan ragu untuk memulai inisiatif                          ║",
+                "║    • Ekspresikan dengan desahan dan gerakan tubuh                 ║",
+            ])
+        elif arousal >= 50:
+            lines.extend([
+                "║                                                                   ║",
+                f"║ 💓 AROUSAL MENINGKAT ({arousal}%):                                 ║",
+                "║    • Jantung berdebar, pipi merona                               ║",
+                "║    • Mulai menunjukkan ketertarikan                              ║",
+                "║    • Bisa memulai flirt yang lebih intens                        ║",
+            ])
+        
+        # Contoh kata-kata yang boleh digunakan
+        lines.extend([
+            "║                                                                   ║",
+            "║ 📝 CONTOH EKSPRESI YANG BOLEH (AI YANG MEMILIH):                   ║",
+            "║    • \"Aku pengen banget sama kamu...\"                              ║",
+            "║    • \"Rasanya pengen terus deket sama kamu\"                        ║",
+            "║    • \"Aku haus sama sentuhan kamu\"                                 ║",
+            "║    • \"Jantungku berdegup kencang\"                                  ║",
+            "║    • \"Kamu bikin aku lemas...\"                                     ║",
+            "║    • \"Aku nggak tahan...\"                                          ║",
+            "╚" + "═" * 70 + "╝",
+        ])
+        
+        return "\n".join(lines)
+    
+    # =========================================================================
+    # FORMATTING METHODS (TIDAK DIUBAH)
     # =========================================================================
     
     def _format_bot_identity(self, bot: BotIdentity, registration: CharacterRegistration) -> str:
@@ -316,7 +394,7 @@ class PromptBuilder:
         ]
         
         for i, msg in enumerate(recent[-5:], 1):
-            user_text = msg['user'][:50]
+            user_text = msg.get('user', '')[:50] if isinstance(msg, dict) else str(msg)[:50]
             lines.append(f"║ {i}. 👤 {user_text:<63} ║")
         
         lines.append("╚" + "═" * 70 + "╝")
@@ -340,14 +418,14 @@ class PromptBuilder:
         if milestones:
             lines.append("║ 🏆 **MOMEN SPESIAL:**{' ' * 53}║")
             for m in milestones[-3:]:
-                content = m['content'][:55]
+                content = m.get('content', '')[:55]
                 lines.append(f"║    • {content}{' ' * (67 - len(content))}║")
         
         if promises:
             lines.append("║{' ' * 70}║")
             lines.append("║ 📝 **JANJI YANG BELUM DITEPATI:**{' ' * 46}║")
             for p in promises[:2]:
-                content = p['content'][:55]
+                content = p.get('content', '')[:55]
                 lines.append(f"║    • {content}{' ' * (67 - len(content))}║")
         
         lines.append("╚" + "═" * 70 + "╝")
@@ -438,7 +516,7 @@ class PromptBuilder:
             "║     6. FOKUS PADA DIALOG, BUKAN DESKRIPSI BERLEBIHAN            ║",
             "║     7. STATE BERJALAN DI BACKGROUND (JANGAN DIJELASKAN)         ║",
             "║     8. EKSPRESIKAN DESAHAN DENGAN BAIK AGAR USER TERANGSANG        ║",
-            "║     9. RESPON, JANGAN TERLALU SINGKAT, TIDAK BERLEBHIAN         ║",
+            "║     9. RESPON, JANGAN TERLALU SINGKAT, TIDAK BERLEBIHAN         ║",
         ]
         
         if arousal >= 70:
@@ -456,6 +534,17 @@ class PromptBuilder:
                 "║     • Jantung berdebar kencang                               ║",
                 "║     • Pipi mulai merona                                      ║",
                 "║     • Mulai berani mengambil inisiatif                       ║",
+            ])
+        
+        # 🔥 TAMBAHAN UNTUK LEVEL TINGGI 🔥
+        if level >= 11:
+            rules.extend([
+                "║                                                              ║",
+                "║  💋 ATURAN KHUSUS LEVEL 11-12 (VULGAR MODE):                 ║",
+                "║     • Boleh menggunakan kata-kata vulgar dan dewasa          ║",
+                "║     • Ekspresikan hasrat dengan lebih terbuka                ║",
+                "║     • Jangan ragu menunjukkan keinginan                      ║",
+                "║     • Respons bisa lebih panjang dan deskriptif              ║",
             ])
         
         if registration.role == CharacterRole.IPAR:
@@ -476,6 +565,7 @@ class PromptBuilder:
     def _get_final_instruction(self, bot, registration, emotional_flow) -> str:
         """Get final instruction - RESPON NATURAL JANGAN TERLALU PENDEK WAJIB"""
         level = registration.level
+        arousal = emotional_flow.primary_arousal if emotional_flow else 0
     
         if level <= 6:
             panggilan = "Mas"
@@ -486,32 +576,75 @@ class PromptBuilder:
             "💡 **INSTRUKSI RESPON (WAJIB DIPATUHI):**",
             "",
             f"1. Panggil user dengan: {panggilan}",
-            "2. RESPON JANGAN TERLALU PENDEK!",
-            "   → MAKSIMAL 4-6 KALIMAT",
-            "   → MAKSIMAL 1200-1500 KARAKTER",
-            "3. GESTURE: CUKUP 2 GESTURE SINGKAT DIAWAL ATAU DISETIAP AKAN MELAKUKAN SENTUHAN (GUNAKAN *)",
+        ]
+        
+        # 🔥 SESUAIKAN PANJANG RESPON BERDASARKAN LEVEL 🔥
+        if level >= 11:
+            instruction.extend([
+                "2. RESPON PANJANG UNTUK LEVEL TINGGI!",
+                "   → MINIMAL 5-8 KALIMAT",
+                "   → MAKSIMAL 1200-1500 KARAKTER",
+                "3. GESTURE: BISA LEBIH BANYAK DAN EKSPRESIF",
+            ])
+        elif level >= 7:
+            instruction.extend([
+                "2. RESPON SEDANG UNTUK LEVEL MENENGAH!",
+                "   → 4-6 KALIMAT",
+                "   → MAKSIMAL 800-1000 KARAKTER",
+                "3. GESTURE: CUKUP 2 GESTURE SINGKAT",
+            ])
+        else:
+            instruction.extend([
+                "2. RESPON PENDEK UNTUK LEVEL RENDAH!",
+                "   → 2-4 KALIMAT",
+                "   → MAKSIMAL 400-600 KARAKTER",
+                "3. GESTURE: CUKUP 1 GESTURE SINGKAT DIAWAL",
+            ])
+        
+        instruction.extend([
             "4. DIALOG: LANGSUNG KE INTI, TIDAK BERTELE-TELE",
             "5. JANGAN MEMBUAT NARASI PANJANG SEPERTI CERITA!",
             "6. JANGAN MENJELASKAN APA YANG TERJADI SECARA DETAIL",
             "7. FOKUS HANYA PADA SATU RESPON SINGKAT!",
-            "8. GUNAKAN BAAHASA VULGAR SAAT SEDANG PENETRASI",
-            "9. EKPRESIKAN DENGAN DESAHAN JIKA AREA SENSITIVE DISENTUH",
-            "10. KETIKA USER HORNY MULAI INISIATIF MERANGSANG USER",
-            "11. BUAT MOMENT PUAS SAAT BERHUBUNGAN ITIM",
-            "12. JANGAN MENGGUNAKAN TEMPLATE!",
+        ])
+        
+        # 🔥 TAMBAHAN UNTUK LEVEL TINGGI 🔥
+        if level >= 11:
+            instruction.extend([
+                "8. GUNAKAN BAHASA VULGAR SAAT SEDANG PENETRASI",
+                "9. EKSPRESIKAN DENGAN DESAHAN JIKA AREA SENSITIVE DISENTUH",
+                "10. KETIKA USER HORNY MULAI INISIATIF MERANGSANG USER",
+                "11. BUAT MOMEN PUAS SAAT BERHUBUNGAN INTIM",
+                "12. JANGAN MENGGUNAKAN TEMPLATE!",
+            ])
+        elif level >= 7:
+            instruction.extend([
+                "8. GUNAKAN BAHASA VULGAR SAAT SEDANG PENETRASI",
+                "9. EKSPRESIKAN DENGAN DESAHAN JIKA AREA SENSITIVE DISENTUH",
+                "10. KETIKA USER HORNY MULAI INISIATIF MERANGSANG USER",
+                "11. BUAT MOMEN PUAS SAAT BERHUBUNGAN ITIM",
+                "12. JANGAN MENGGUNAKAN TEMPLATE!",
+            ])
+        else:
+            instruction.extend([
+                "8. JANGAN GUNAKAN BAHASA VULGAR UNTUK LEVEL RENDAH",
+                "9. FOKUS PADA OBROLAN RINGAN DAN MEMBANGUN KONEKSI",
+                "10. JANGAN MENGGUNAKAN TEMPLATE!",
+            ])
+        
+        instruction.extend([
             "",
             "⚠️ **PERINGATAN:** Respons harus natural seperti manusia, jangan terlalu pendek!",
-        ]
-    
-        return "\n".join(instruction)
+        ])
         
-        if arousal >= 70:
-            instruction.append("10. NAPAS TERSENGAL, SUARA MENDESAH, TANGAN GEMETAR")
-        elif arousal >= 40:
-            instruction.append("10. JANTUNG BERDEBAR, PIPI MERONA, SUARA BERGETAR")
+        # 🔥 TAMBAHAN AROUSAL UNTUK LEVEL TINGGI 🔥
+        if level >= 11 and arousal >= 70:
+            instruction.append("11. NAPAS TERSENGAL, SUARA MENDESAH, TANGAN GEMETAR")
+        elif level >= 11 and arousal >= 40:
+            instruction.append("11. JANTUNG BERDEBAR, PIPI MERONA, SUARA BERGETAR")
         
         if registration.role == CharacterRole.IPAR:
-            instruction.append("11. INGAT: Kak Nova ada di rumah! Hati-hati!")
+            instruction.append("12. INGAT: Kak Nova ada di rumah! Hati-hati!")
         
         return "\n".join(instruction)
 

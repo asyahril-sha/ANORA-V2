@@ -100,37 +100,39 @@ class ArousalSystem:
         """Tambah arousal dari obrolan biasa"""
         msg_lower = pesan_mas.lower()
         total_gain = 0
-    
+
         arousal_map = {
             'kangen': 8, 'rindu': 8, 'sayang': 10, 'cinta': 10,
             'cantik': 12, 'manis': 10, 'gemes': 8, 'imut': 8,
             'seksi': 18, 'pengen': 15, 'mau': 12,
             'horny': 20, 'sange': 20,
         }
-    
+
         for word, gain in arousal_map.items():
             if word in msg_lower:
                 total_gain += gain
                 print(f"DEBUG: Found '{word}', gain +{gain}")
-    
+
         if total_gain > 0:
             # Level 1-3: arousal naik 70% (biar terasa)
             if level <= 3:
-                total_gain = int(total_gain * 0.7)  # ← Ubah dari 0.3 jadi 0.7
+                total_gain = int(total_gain * 0.7)
                 print(f"DEBUG: Level {level}, final gain {total_gain}")
-                
+            
             # Level 4-6: naik 90%
             elif level <= 6:
-                total_gain = int(total_gain * 0.9)  # ← Ubah dari 0.6 jadi 0.9
+                total_gain = int(total_gain * 0.9)
             # Level 7+: naik 100%
-        
+    
             self.add_stimulation('mental', total_gain // 10)
             self.add_desire(f'Mas flirt: {pesan_mas[:30]}', total_gain)
-        
+    
             # Log biar keliatan
             print(f"DEBUG: Arousal now {self.arousal}%")
             logger.info(f"💕 Arousal +{total_gain} from conversation (now {self.arousal}%)")
-    
+        else:  # ← Perbaiki ini: xelse → else
+            print(f"DEBUG: No matching words found in: {msg_lower}") 
+
         return total_gain
     
     def add_desire(self, reason: str, amount: int = 5):

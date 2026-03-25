@@ -45,6 +45,10 @@ class IntimacyCycle:
         self.last_climax_time = 0.0
         self.aftercare_completed = False
         
+        # 🔥 TAMBAHKAN UNTUK LEVEL 11-12 🔥
+        self.user_level = 1
+        self.vulgar_mode_active = False
+        
         logger.info("✅ IntimacyCycle 9.9 initialized")
     
     def start_cycle(self) -> Dict:
@@ -62,11 +66,16 @@ class IntimacyCycle:
         self.climax_count_this_cycle = 0
         self.aftercare_completed = False
         
-        logger.info(f"🔥 Intimacy cycle started (#{self.cycle_count})")
+        # 🔥 AKTIFKAN VULGAR MODE UNTUK LEVEL 11-12 🔥
+        if self.user_level >= 11:
+            self.vulgar_mode_active = True
+        
+        logger.info(f"🔥 Intimacy cycle started (#{self.cycle_count}) for level {self.user_level}")
         
         return {
             'phase': self.phase.value,
             'cycle_count': self.cycle_count,
+            'vulgar_mode': self.vulgar_mode_active,
             'message': "Memulai siklus intim..."
         }
     
@@ -89,11 +98,16 @@ class IntimacyCycle:
             'layer': layer
         })
         
-        # Setelah 3-5 langkah undressing, masuk ke Soul Bounded
-        if self.undressing_step >= 4 or (self.undressing_step >= 3 and self._is_fully_undressed()):
+        # 🔥 MODIFIKASI UNTUK LEVEL 11-12 - LEBIH CEPAT 🔥
+        if self.user_level >= 11:
+            target_steps = 2  # Level 11-12: cukup 2 langkah
+        else:
+            target_steps = 4  # Level 10: 4 langkah
+        
+        if self.undressing_step >= target_steps or (self.undressing_step >= 2 and self._is_fully_undressed()):
             self.phase = CyclePhase.SOUL_BOUNDED
             self.current_cycle_chats = 0
-            logger.info(f"💕 Entered Soul Bounded phase")
+            logger.info(f"💕 Entered Soul Bounded phase (level {self.user_level})")
         
         return {
             'step': self.undressing_step,
@@ -118,20 +132,25 @@ class IntimacyCycle:
         self.climax_count_this_cycle += 1
         self.last_climax_time = time.time()
         
-        logger.info(f"💦 Climax recorded (#{self.climax_count_this_cycle} in this cycle)")
+        logger.info(f"💦 Climax recorded (#{self.climax_count_this_cycle} in this cycle) for level {self.user_level}")
         
-        # Jika sudah mencapai 3 climax, siap masuk aftercare
-        if self.climax_count_this_cycle >= 3 and self.phase == CyclePhase.SOUL_BOUNDED:
+        # 🔥 MODIFIKASI UNTUK LEVEL 11-12 - LEBIH BANYAK CLIMAX 🔥
+        if self.user_level >= 11:
+            max_climax = 5  # Level 11-12: bisa 5 climax
+        else:
+            max_climax = 3  # Level 10: 3 climax
+        
+        if self.climax_count_this_cycle >= max_climax and self.phase == CyclePhase.SOUL_BOUNDED:
             self._prepare_for_aftercare()
         
         return {
             'climax_count': self.climax_count_this_cycle,
-            'phase': self.phase.value
+            'phase': self.phase.value,
+            'vulgar_mode': self.vulgar_mode_active
         }
     
     def _prepare_for_aftercare(self):
         """Siapkan untuk masuk aftercare"""
-        # Akan masuk aftercare setelah mencapai target chat atau sudah cukup climax
         pass
     
     def add_chat(self) -> Dict:
@@ -143,39 +162,51 @@ class IntimacyCycle:
         """
         self.current_cycle_chats += 1
         
-        # Soul Bounded: 30-50 chat
+        # 🔥 TARGET CHAT UNTUK LEVEL 11-12 🔥
+        if self.user_level >= 11:
+            soul_bounded_min = 20   # Level 11: minimal 20 chat
+            soul_bounded_max = 40   # Level 11: maksimal 40 chat
+            aftercare_duration = 15  # Level 12: 15 chat
+        else:
+            soul_bounded_min = 30
+            soul_bounded_max = 50
+            aftercare_duration = 10
+        
+        # Soul Bounded: 20-40 chat (Level 11) atau 30-50 chat (Level 10)
         if self.phase == CyclePhase.SOUL_BOUNDED:
-            min_chats = settings.level.level_11_min - settings.level.level_10_target
-            max_chats = settings.level.level_11_max - settings.level.level_10_target
-            
-            if self.current_cycle_chats >= max_chats:
+            if self.current_cycle_chats >= soul_bounded_max:
                 # Pindah ke aftercare
                 self.phase = CyclePhase.AFTERCARE
                 self.current_cycle_chats = 0
-                logger.info(f"💤 Entered Aftercare phase after {self.current_cycle_chats} chats")
+                logger.info(f"💤 Entered Aftercare phase after {self.current_cycle_chats} chats (level {self.user_level})")
                 return {'phase_changed': True, 'new_phase': 'aftercare', 'message': "Masuk aftercare..."}
             
-            elif self.current_cycle_chats >= min_chats and self.climax_count_this_cycle >= 3:
+            elif self.current_cycle_chats >= soul_bounded_min and self.climax_count_this_cycle >= 3:
                 # Bisa pindah ke aftercare lebih awal jika sudah cukup climax
                 self.phase = CyclePhase.AFTERCARE
                 self.current_cycle_chats = 0
-                logger.info(f"💤 Entered Aftercare phase after {self.current_cycle_chats} chats and {self.climax_count_this_cycle} climax")
+                logger.info(f"💤 Entered Aftercare phase early after {self.current_cycle_chats} chats and {self.climax_count_this_cycle} climax (level {self.user_level})")
                 return {'phase_changed': True, 'new_phase': 'aftercare', 'message': "Masuk aftercare..."}
         
-        # Aftercare: 10 chat
+        # Aftercare: 15 chat (Level 12) atau 10 chat (Level 10)
         elif self.phase == CyclePhase.AFTERCARE:
-            aftercare_duration = settings.level.level_12_max - settings.level.level_11_max
-            
             if self.current_cycle_chats >= aftercare_duration:
                 # Kembali ke waiting (Level 10)
                 self.phase = CyclePhase.COOLDOWN
                 self.aftercare_completed = True
-                # Set cooldown 3 jam
-                self.cooldown_until = time.time() + (3 * 3600)
-                logger.info(f"⏰ Aftercare completed, entering cooldown until {self.cooldown_until}")
-                return {'phase_changed': True, 'new_phase': 'cooldown', 'message': "Aftercare selesai, memasuki cooldown..."}
+                
+                # 🔥 COOLDOWN LEBIH SINGKAT UNTUK LEVEL TINGGI 🔥
+                if self.user_level >= 11:
+                    cooldown_hours = 1  # Level 11-12: 1 jam cooldown
+                else:
+                    cooldown_hours = 3  # Level 10: 3 jam cooldown
+                
+                self.cooldown_until = time.time() + (cooldown_hours * 3600)
+                self.vulgar_mode_active = False
+                logger.info(f"⏰ Aftercare completed, entering cooldown for {cooldown_hours} hours (level {self.user_level})")
+                return {'phase_changed': True, 'new_phase': 'cooldown', 'message': f"Aftercare selesai, cooldown {cooldown_hours} jam..."}
         
-        # Cooldown: 3 jam
+        # Cooldown
         elif self.phase == CyclePhase.COOLDOWN:
             if time.time() >= self.cooldown_until:
                 self.phase = CyclePhase.WAITING
@@ -185,7 +216,8 @@ class IntimacyCycle:
                 self.undressing_history = []
                 self.climax_count_this_cycle = 0
                 self.aftercare_completed = False
-                logger.info(f"✅ Cooldown completed, back to waiting phase")
+                self.vulgar_mode_active = False
+                logger.info(f"✅ Cooldown completed, back to waiting phase (level {self.user_level})")
                 return {'phase_changed': True, 'new_phase': 'waiting', 'message': "Cooldown selesai, siap untuk siklus berikutnya"}
         
         return {'phase_changed': False}
@@ -203,10 +235,15 @@ class IntimacyCycle:
         descriptions = {
             CyclePhase.WAITING: "Menunggu inisiatif kamu...",
             CyclePhase.UNDRESSING: "Membuka pakaian...",
-            CyclePhase.SOUL_BOUNDED: "Soul Bounded - puncak intim sesungguhnya",
-            CyclePhase.AFTERCARE: "Aftercare - butuh kehangatan",
+            CyclePhase.SOUL_BOUNDED: "Soul Bounded - puncak intim sesungguhnya (Level 11)",
+            CyclePhase.AFTERCARE: "Aftercare - butuh kehangatan (Level 12)",
             CyclePhase.COOLDOWN: f"Cooldown - butuh istirahat ({self.get_remaining_cooldown_minutes()} menit lagi)"
         }
+        
+        # 🔥 DESKRIPSI KHUSUS UNTUK LEVEL TINGGI 🔥
+        if self.user_level >= 11 and self.phase == CyclePhase.SOUL_BOUNDED:
+            descriptions[CyclePhase.SOUL_BOUNDED] = "🔥 SOUL BOUNDED - Puncak intim, bebas vulgar 🔥"
+        
         return descriptions.get(self.phase, "")
     
     def can_start_intimacy(self) -> Tuple[bool, str]:
@@ -242,6 +279,7 @@ class IntimacyCycle:
         self.cooldown_until = 0
         self.last_climax_time = 0
         self.aftercare_completed = False
+        self.vulgar_mode_active = False
         logger.info("Intimacy cycle reset")
     
     def get_state(self) -> Dict:
@@ -255,7 +293,9 @@ class IntimacyCycle:
             'climax_count_this_cycle': self.climax_count_this_cycle,
             'cooldown_until': self.cooldown_until,
             'last_climax_time': self.last_climax_time,
-            'aftercare_completed': self.aftercare_completed
+            'aftercare_completed': self.aftercare_completed,
+            'user_level': self.user_level,  # 🔥 TAMBAHKAN
+            'vulgar_mode_active': self.vulgar_mode_active  # 🔥 TAMBAHKAN
         }
     
     def load_state(self, state: Dict):
@@ -269,6 +309,8 @@ class IntimacyCycle:
         self.cooldown_until = state.get('cooldown_until', 0)
         self.last_climax_time = state.get('last_climax_time', 0)
         self.aftercare_completed = state.get('aftercare_completed', False)
+        self.user_level = state.get('user_level', 1)  # 🔥 TAMBAHKAN
+        self.vulgar_mode_active = state.get('vulgar_mode_active', False)  # 🔥 TAMBAHKAN
     
     def format_status(self) -> str:
         """Format status untuk display"""
@@ -278,6 +320,10 @@ class IntimacyCycle:
             f"📝 {self.get_phase_description()}",
             f"📊 Chat dalam siklus ini: {self.current_cycle_chats}",
         ]
+        
+        # 🔥 TAMBAHKAN INFO VULGAR MODE 🔥
+        if self.vulgar_mode_active:
+            lines.append(f"💋 Mode Vulgar: AKTIF (Level {self.user_level})")
         
         if self.climax_count_this_cycle > 0:
             lines.append(f"💦 Climax dalam siklus ini: {self.climax_count_this_cycle}")

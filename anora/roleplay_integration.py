@@ -430,6 +430,7 @@ class AnoraRoleplay:
 👗 **Nova:** {self.brain.clothing.format_nova()}
 💭 **Mood:** {self.brain.mood_nova.value}
 💪 **Stamina Nova:** {self.stamina.nova_current}% ({self.stamina.get_nova_status()})
+💜 **Level:** {self.brain.relationship.level}/12
 
 Mas udah depan. Kirim **'masuk'** kalo mau masuk.
 Kirim **/pindah [tempat]** buat ganti lokasi.
@@ -462,6 +463,7 @@ Kirim **/batal** buat balik ke mode chat.
         
         self.message_count += 1
         pesan_lower = pesan_mas.lower()
+        level_sebelum = self.brain.relationship.level
         
         # ========== DETEKSI PERINTAH INTIM ==========
         
@@ -548,6 +550,9 @@ Kirim **/batal** buat balik ke mode chat.
         # ========== UPDATE BRAIN DARI PESAN MAS ==========
         update_result = self.brain.update_from_message(pesan_mas)
         
+        # ========== UPDATE LEVEL BERDASARKAN INTERAKSI ==========
+        level_naik = self.brain.update_level()
+        
         # Tambah ke timeline
         self.brain.tambah_kejadian(
             kejadian=f"Mas: {pesan_mas[:50]}",
@@ -562,12 +567,21 @@ Kirim **/batal** buat balik ke mode chat.
             logger.error(f"AI process error: {e}")
             respons = self._fallback_response(pesan_mas)
         
+        # ========== FORMAT RESPONS AGAR RAPI ==========
+        respons = self._format_response(respons)
+        
         # Tambah ke timeline
         self.brain.tambah_kejadian(
             kejadian=f"Nova: {respons[:50]}",
             pesan_mas=pesan_mas,
             pesan_nova=respons
         )
+        
+        # ========== KALO LEVEL NAIK, TAMBAHKAN NOTIFIKASI ==========
+        if level_naik:
+            level_baru = self.brain.relationship.level
+            notifikasi = f"✨ **Level naik ke {level_baru}/12!** ✨\n\n"
+            respons = notifikasi + respons
         
         # ========== SIMPAN STATE ==========
         await self.save_state()
@@ -577,24 +591,89 @@ Kirim **/batal** buat balik ke mode chat.
         
         return respons
     
+    def _format_response(self, text: str) -> str:
+        """Format respons biar rapi"""
+        if not text:
+            return text
+        
+        lines = text.split('\n')
+        formatted = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Gesture (*...*) di baris sendiri
+            if line.startswith('*') and line.endswith('*'):
+                formatted.append(f"\n{line}")
+            # Dialog dengan tanda petik
+            elif line.startswith('"') or line.startswith('“'):
+                formatted.append(f"{line}")
+            # Campuran gesture dan dialog
+            elif '*' in line and ('"' in line or '“' in line):
+                # Pisahkan
+                if line.startswith('*'):
+                    # *gesture* "dialog"
+                    import re
+                    match = re.match(r'^\*(.+?)\*\s*["“](.+?)["”]', line)
+                    if match:
+                        gesture = f"*{match.group(1)}*"
+                        dialog = f'"{match.group(2)}"'
+                        formatted.append(f"\n{gesture}")
+                        formatted.append(f"{dialog}")
+                    else:
+                        formatted.append(f"{line}")
+                else:
+                    formatted.append(f"{line}")
+            else:
+                formatted.append(f"{line}")
+        
+        # Gabungin
+        result = '\n'.join(formatted)
+        
+        # Bersihin multiple newline
+        import re
+        result = re.sub(r'\n{3,}', '\n\n', result)
+        
+        return result.strip()
+    
     def _fallback_response(self, pesan_mas: str) -> str:
         """Fallback kalo AI error - tetap natural"""
         msg_lower = pesan_mas.lower()
         loc = self.brain.get_location_data()
+        level = self.brain.relationship.level
         
-        if 'masuk' in msg_lower:
-            return f"*Nova buka pintu pelan-pelan. {self.brain.clothing.format_nova()}. Pipi langsung merah.*\n\n\"Mas... masuk yuk.\"\n\n*Nova minggir, kasih Mas jalan. Tangan Nova gemeteran.*\n\n*{loc['tips']}*"
+        # Respons berdasarkan level
+        if level <= 3:
+            if 'masuk' in msg_lower:
+                return f"*Nova buka pintu pelan-pelan. {self.brain.clothing.format_nova()}. Pipi langsung merah.*\n\n\"Mas... masuk yuk.\"\n\n*Nova minggir, kasih Mas jalan. Tangan Nova gemeteran.*"
+            
+            if 'sayang' in msg_lower:
+                return f"*Nova tunduk, pipi merah* \"Mas... aku juga sayang Mas.\""
+            
+            if 'kangen' in msg_lower:
+                return f"*Nova muter-muter rambut, mata berkaca-kaca* \"Mas... aku juga kangen. Dari tadi mikirin Mas terus.\""
+            
+            return f"*Nova duduk di samping Mas, tangan di pangkuan* \"Mas cerita dong. Aku suka dengerin suara Mas.\""
         
-        if 'sayang' in msg_lower:
-            return f"*Nova tunduk, pipi merah* \"Mas... aku juga sayang Mas.\""
+        elif level <= 6:
+            if 'masuk' in msg_lower:
+                return f"*Nova buka pintu, senyum manis* \"Mas... masuk yuk. Aku udah nunggu dari tadi.\"\n\n*Nova merapikan hijabnya, pipi sedikit merah*"
+            
+            if 'pegang' in msg_lower:
+                return f"*Nova pegang tangan Mas balik, meskipun masih gemetar* \"Mas... tangan Mas... hangat ya...\""
+            
+            if 'peluk' in msg_lower:
+                return f"*Nova langsung lemas di pelukan Mas* \"Mas... enak...\""
+            
+            return f"*Nova duduk manis di samping Mas* \"Mas, cerita tentang hari Mas dong. Aku suka dengerin.\""
         
-        if 'kangen' in msg_lower:
-            return f"*Nova muter-muter rambut, mata berkaca-kaca* \"Mas... aku juga kangen. Dari tadi mikirin Mas terus.\""
-        
-        if 'pegang' in msg_lower:
-            return f"*Tangan Nova gemeteran* \"Mas... tangan Mas... panas banget...\""
-        
-        return f"*Nova duduk di samping Mas, tangan di pangkuan* \"Mas cerita dong. Aku suka dengerin suara Mas.\""
+        else:
+            if any(k in msg_lower for k in ['pengen', 'mau']):
+                return f"*Nova napas mulai tersengal, tangan gemetar* \"Mas... aku... aku juga pengen...\"\n\n*Nova pegang tangan Mas, taruh di dada* \"Rasain... jantung Nova deg-degan...\""
+            
+            return f"*Nova duduk di samping Mas, tersenyum* \"Mas, seru ya ngobrol sama Mas. Pengen terus kayak gini.\""
     
     async def get_status(self) -> str:
         """Dapatkan status roleplay lengkap"""
@@ -624,6 +703,7 @@ Kirim **/batal** buat balik ke mode chat.
 ╠══════════════════════════════════════════════════════════════╣
 ║ DURASI: {self._get_duration()}                               ║
 ║ PESAN: {self.message_count}                                  ║
+║ LEVEL: {self.brain.relationship.level}/12                    ║
 ╠══════════════════════════════════════════════════════════════╣
 ║ 📍 LOKASI: {loc['nama']}                                     ║
 ║    {loc['deskripsi'][:50]}...                                ║

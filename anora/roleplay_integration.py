@@ -467,7 +467,17 @@ Kirim **/batal** buat balik ke mode chat.
         
         # ========== UPDATE AROUSAL DARI OBROLAN (BARU!) ==========
         # Ini dilakukan di ai.process juga, tapi kita update juga di sini untuk konsistensi
-        self.ai.arousal.add_from_conversation(pesan_mas, self.brain.relationship.level)
+        self.ai.arousal.add_from_conversation(pesan_mas, self.brain.relationship.level
+                                             
+        # ========== TAMBAHKAN INI ==========
+        # Sync arousal dari ai ke brain feelings
+        self.brain.feelings.arousal = self.ai.arousal.arousal
+        self.brain.feelings.desire = self.ai.arousal.desire
+        self.brain.feelings.tension = self.ai.arousal.tension
+    
+        # Log biar tau
+        logger.info(f"📊 Arousal now: {self.ai.arousal.arousal}%")
+        # ========== SAMPAI SINI ==========
 
         # ========== SYNC AROUSAL KE BRAIN FEELINGS ==========
         self.brain.feelings.arousal = self.ai.arousal.arousal

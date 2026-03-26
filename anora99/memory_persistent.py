@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 
 # ========== IMPORT ANORA 9.9 ==========
-from .brain import get_anora_brain_99
+from .brain import get_anora_brain
 from .emotional_engine import get_emotional_engine
 from .relationship import get_relationship_manager
 from .conflict_engine import get_conflict_engine
@@ -23,7 +23,7 @@ from .conflict_engine import get_conflict_engine
 logger = logging.getLogger(__name__)
 
 
-class PersistentMemory99:
+class PersistentMemory:
     """
     Memory permanen Nova 9.9. Disimpan ke database.
     - Timeline: semua kejadian
@@ -37,7 +37,7 @@ class PersistentMemory99:
     - RELATIONSHIP STATE: semua fase dari relationship manager
     """
     
-    def __init__(self, db_path: Path = Path("data/anora99.db")):
+    def __init__(self, db_path: Path = Path("data/anora.db")):
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = None
@@ -48,7 +48,7 @@ class PersistentMemory99:
         
         # ========== TABEL STATE UTAMA ==========
         await self._conn.execute('''
-            CREATE TABLE IF NOT EXISTS anora99_state (
+            CREATE TABLE IF NOT EXISTS anora_state (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
                 updated_at REAL NOT NULL
@@ -57,7 +57,7 @@ class PersistentMemory99:
         
         # ========== TABEL COMPLETE STATE ==========
         await self._conn.execute('''
-            CREATE TABLE IF NOT EXISTS complete_state_99 (
+            CREATE TABLE IF NOT EXISTS complete_state (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 mas_state TEXT NOT NULL,
                 nova_state TEXT NOT NULL,
@@ -68,7 +68,7 @@ class PersistentMemory99:
         
         # ========== TABEL EMOTIONAL STATE ==========
         await self._conn.execute('''
-            CREATE TABLE IF NOT EXISTS emotional_state_99 (
+            CREATE TABLE IF NOT EXISTS emotional_state (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 sayang REAL NOT NULL,
                 rindu REAL NOT NULL,
@@ -85,7 +85,7 @@ class PersistentMemory99:
         
         # ========== TABEL RELATIONSHIP STATE ==========
         await self._conn.execute('''
-            CREATE TABLE IF NOT EXISTS relationship_state_99 (
+            CREATE TABLE IF NOT EXISTS relationship_state (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 phase TEXT NOT NULL,
                 level INTEGER NOT NULL,
@@ -97,7 +97,7 @@ class PersistentMemory99:
         
         # ========== TABEL CONFLICT STATE ==========
         await self._conn.execute('''
-            CREATE TABLE IF NOT EXISTS conflict_state_99 (
+            CREATE TABLE IF NOT EXISTS conflict_state (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 cemburu REAL NOT NULL,
                 kecewa REAL NOT NULL,
@@ -111,7 +111,7 @@ class PersistentMemory99:
         
         # ========== TABEL TIMELINE ==========
         await self._conn.execute('''
-            CREATE TABLE IF NOT EXISTS timeline_99 (
+            CREATE TABLE IF NOT EXISTS timeline (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp REAL NOT NULL,
                 kejadian TEXT NOT NULL,
@@ -129,7 +129,7 @@ class PersistentMemory99:
         
         # ========== TABEL SHORT-TERM MEMORY ==========
         await self._conn.execute('''
-            CREATE TABLE IF NOT EXISTS short_term_memory_99 (
+            CREATE TABLE IF NOT EXISTS short_term_memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp REAL NOT NULL,
                 kejadian TEXT NOT NULL,
@@ -147,7 +147,7 @@ class PersistentMemory99:
         
         # ========== TABEL LONG-TERM MEMORY ==========
         await self._conn.execute('''
-            CREATE TABLE IF NOT EXISTS long_term_memory_99 (
+            CREATE TABLE IF NOT EXISTS long_term_memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 tipe TEXT NOT NULL,
                 judul TEXT NOT NULL,
@@ -159,7 +159,7 @@ class PersistentMemory99:
         
         # ========== TABEL CURRENT STATE ==========
         await self._conn.execute('''
-            CREATE TABLE IF NOT EXISTS current_state_99 (
+            CREATE TABLE IF NOT EXISTS current_state (
                 id INTEGER PRIMARY KEY,
                 lokasi_type TEXT NOT NULL,
                 lokasi_detail TEXT NOT NULL,
@@ -178,7 +178,7 @@ class PersistentMemory99:
         
         # ========== TABEL PERCAKAPAN ==========
         await self._conn.execute('''
-            CREATE TABLE IF NOT EXISTS conversation_99 (
+            CREATE TABLE IF NOT EXISTS conversation (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp REAL NOT NULL,
                 role TEXT NOT NULL,
@@ -189,7 +189,7 @@ class PersistentMemory99:
         
         # ========== TABEL KUNJUNGAN LOKASI ==========
         await self._conn.execute('''
-            CREATE TABLE IF NOT EXISTS location_visits_99 (
+            CREATE TABLE IF NOT EXISTS location_visits (
                 id TEXT PRIMARY KEY,
                 nama TEXT NOT NULL,
                 visit_count INTEGER DEFAULT 1,
@@ -198,10 +198,10 @@ class PersistentMemory99:
         ''')
         
         # ========== INDEXES ==========
-        await self._conn.execute('CREATE INDEX IF NOT EXISTS idx_timeline_99_time ON timeline_99(timestamp)')
-        await self._conn.execute('CREATE INDEX IF NOT EXISTS idx_short_term_99_time ON short_term_memory_99(timestamp)')
-        await self._conn.execute('CREATE INDEX IF NOT EXISTS idx_long_term_99_tipe ON long_term_memory_99(tipe)')
-        await self._conn.execute('CREATE INDEX IF NOT EXISTS idx_conversation_99_time ON conversation_99(timestamp)')
+        await self._conn.execute('CREATE INDEX IF NOT EXISTS idx_timeline_time ON timeline(timestamp)')
+        await self._conn.execute('CREATE INDEX IF NOT EXISTS idx_short_term_time ON short_term_memory(timestamp)')
+        await self._conn.execute('CREATE INDEX IF NOT EXISTS idx_long_term_tipe ON long_term_memory(tipe)')
+        await self._conn.execute('CREATE INDEX IF NOT EXISTS idx_conversation_time ON conversation(timestamp)')
         
         await self._conn.commit()
         
@@ -213,7 +213,7 @@ class PersistentMemory99:
     async def _init_state(self):
         """Inisialisasi state awal"""
         # Cek apakah tabel complete_state sudah ada isinya
-        cursor = await self._conn.execute("SELECT COUNT(*) FROM complete_state_99")
+        cursor = await self._conn.execute("SELECT COUNT(*) FROM complete_state")
         count = await cursor.fetchone()
         
         if count[0] == 0:
@@ -249,38 +249,38 @@ class PersistentMemory99:
             }
             
             await self._conn.execute(
-                "INSERT INTO complete_state_99 (id, mas_state, nova_state, together_state, updated_at) VALUES (1, ?, ?, ?, ?)",
+                "INSERT INTO complete_state (id, mas_state, nova_state, together_state, updated_at) VALUES (1, ?, ?, ?, ?)",
                 (json.dumps(default_complete['mas']), json.dumps(default_complete['nova']), 
                  json.dumps(default_complete['together']), time.time())
             )
             await self._conn.commit()
-            logger.info("📀 Complete state 99 initialized")
+            logger.info("📀 Complete state initialized")
         
         # Cek emotional state
-        cursor = await self._conn.execute("SELECT COUNT(*) FROM emotional_state_99")
+        cursor = await self._conn.execute("SELECT COUNT(*) FROM emotional_state")
         if (await cursor.fetchone())[0] == 0:
             await self._conn.execute(
-                "INSERT INTO emotional_state_99 (id, sayang, rindu, trust, mood, desire, arousal, tension, cemburu, kecewa, updated_at) "
+                "INSERT INTO emotional_state (id, sayang, rindu, trust, mood, desire, arousal, tension, cemburu, kecewa, updated_at) "
                 "VALUES (1, 50, 0, 50, 0, 0, 0, 0, 0, 0, ?)",
                 (time.time(),)
             )
             await self._conn.commit()
         
         # Cek relationship state
-        cursor = await self._conn.execute("SELECT COUNT(*) FROM relationship_state_99")
+        cursor = await self._conn.execute("SELECT COUNT(*) FROM relationship_state")
         if (await cursor.fetchone())[0] == 0:
             await self._conn.execute(
-                "INSERT INTO relationship_state_99 (id, phase, level, interaction_count, milestones, updated_at) "
+                "INSERT INTO relationship_state (id, phase, level, interaction_count, milestones, updated_at) "
                 "VALUES (1, 'stranger', 1, 0, '{}', ?)",
                 (time.time(),)
             )
             await self._conn.commit()
         
         # Cek conflict state
-        cursor = await self._conn.execute("SELECT COUNT(*) FROM conflict_state_99")
+        cursor = await self._conn.execute("SELECT COUNT(*) FROM conflict_state")
         if (await cursor.fetchone())[0] == 0:
             await self._conn.execute(
-                "INSERT INTO conflict_state_99 (id, cemburu, kecewa, marah, sakit_hati, is_cold_war, is_waiting_for_apology, updated_at) "
+                "INSERT INTO conflict_state (id, cemburu, kecewa, marah, sakit_hati, is_cold_war, is_waiting_for_apology, updated_at) "
                 "VALUES (1, 0, 0, 0, 0, 0, 0, ?)",
                 (time.time(),)
             )
@@ -292,21 +292,21 @@ class PersistentMemory99:
     
     async def get_state(self, key: str) -> Optional[str]:
         """Dapatkan state berdasarkan key"""
-        cursor = await self._conn.execute("SELECT value FROM anora99_state WHERE key = ?", (key,))
+        cursor = await self._conn.execute("SELECT value FROM anora_state WHERE key = ?", (key,))
         row = await cursor.fetchone()
         return row[0] if row else None
     
     async def set_state(self, key: str, value: str):
         """Simpan state ke database"""
         await self._conn.execute(
-            "INSERT OR REPLACE INTO anora99_state (key, value, updated_at) VALUES (?, ?, ?)",
+            "INSERT OR REPLACE INTO anora_state (key, value, updated_at) VALUES (?, ?, ?)",
             (key, value, time.time())
         )
         await self._conn.commit()
     
     async def get_all_states(self) -> Dict[str, str]:
         """Dapatkan semua state"""
-        cursor = await self._conn.execute("SELECT key, value FROM anora99_state")
+        cursor = await self._conn.execute("SELECT key, value FROM anora_state")
         rows = await cursor.fetchall()
         return {row[0]: row[1] for row in rows}
     
@@ -320,7 +320,7 @@ class PersistentMemory99:
             complete = brain.complete_state
             
             await self._conn.execute(
-                """INSERT OR REPLACE INTO complete_state_99 
+                """INSERT OR REPLACE INTO complete_state 
                    (id, mas_state, nova_state, together_state, updated_at) 
                    VALUES (1, ?, ?, ?, ?)""",
                 (json.dumps(complete['mas']), json.dumps(complete['nova']), 
@@ -335,7 +335,7 @@ class PersistentMemory99:
         """Load complete_state dari database ke brain"""
         try:
             cursor = await self._conn.execute(
-                "SELECT mas_state, nova_state, together_state FROM complete_state_99 WHERE id = 1"
+                "SELECT mas_state, nova_state, together_state FROM complete_state WHERE id = 1"
             )
             row = await cursor.fetchone()
             
@@ -358,7 +358,7 @@ class PersistentMemory99:
         """Simpan emotional state ke database"""
         try:
             await self._conn.execute(
-                """INSERT OR REPLACE INTO emotional_state_99 
+                """INSERT OR REPLACE INTO emotional_state 
                    (id, sayang, rindu, trust, mood, desire, arousal, tension, cemburu, kecewa, updated_at) 
                    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (emotional_engine.sayang, emotional_engine.rindu, emotional_engine.trust,
@@ -375,7 +375,7 @@ class PersistentMemory99:
         """Load emotional state dari database"""
         try:
             cursor = await self._conn.execute(
-                "SELECT sayang, rindu, trust, mood, desire, arousal, tension, cemburu, kecewa FROM emotional_state_99 WHERE id = 1"
+                "SELECT sayang, rindu, trust, mood, desire, arousal, tension, cemburu, kecewa FROM emotional_state WHERE id = 1"
             )
             row = await cursor.fetchone()
             
@@ -404,7 +404,7 @@ class PersistentMemory99:
         """Simpan relationship state ke database"""
         try:
             await self._conn.execute(
-                """INSERT OR REPLACE INTO relationship_state_99 
+                """INSERT OR REPLACE INTO relationship_state 
                    (id, phase, level, interaction_count, milestones, updated_at) 
                    VALUES (1, ?, ?, ?, ?, ?)""",
                 (relationship_manager.phase.value, relationship_manager.level,
@@ -421,7 +421,7 @@ class PersistentMemory99:
         """Load relationship state dari database"""
         try:
             cursor = await self._conn.execute(
-                "SELECT phase, level, interaction_count, milestones FROM relationship_state_99 WHERE id = 1"
+                "SELECT phase, level, interaction_count, milestones FROM relationship_state WHERE id = 1"
             )
             row = await cursor.fetchone()
             
@@ -451,7 +451,7 @@ class PersistentMemory99:
         """Simpan conflict state ke database"""
         try:
             await self._conn.execute(
-                """INSERT OR REPLACE INTO conflict_state_99 
+                """INSERT OR REPLACE INTO conflict_state 
                    (id, cemburu, kecewa, marah, sakit_hati, is_cold_war, is_waiting_for_apology, updated_at) 
                    VALUES (1, ?, ?, ?, ?, ?, ?, ?)""",
                 (conflict_engine.cemburu, conflict_engine.kecewa, conflict_engine.marah,
@@ -467,7 +467,7 @@ class PersistentMemory99:
         """Load conflict state dari database"""
         try:
             cursor = await self._conn.execute(
-                "SELECT cemburu, kecewa, marah, sakit_hati, is_cold_war, is_waiting_for_apology FROM conflict_state_99 WHERE id = 1"
+                "SELECT cemburu, kecewa, marah, sakit_hati, is_cold_war, is_waiting_for_apology FROM conflict_state WHERE id = 1"
             )
             row = await cursor.fetchone()
             
@@ -511,7 +511,7 @@ class PersistentMemory99:
     async def save_timeline_event(self, event):
         """Simpan kejadian ke timeline"""
         await self._conn.execute('''
-            INSERT INTO timeline_99 (
+            INSERT INTO timeline (
                 timestamp, kejadian, lokasi_type, lokasi_detail,
                 aktivitas_nova, aktivitas_mas, perasaan,
                 pakaian_nova, pakaian_mas, pesan_mas, pesan_nova
@@ -533,16 +533,16 @@ class PersistentMemory99:
     
     async def save_short_term(self, event):
         """Simpan ke short-term memory"""
-        cursor = await self._conn.execute("SELECT COUNT(*) FROM short_term_memory_99")
+        cursor = await self._conn.execute("SELECT COUNT(*) FROM short_term_memory")
         count = (await cursor.fetchone())[0]
         
         if count >= 50:
             await self._conn.execute(
-                "DELETE FROM short_term_memory_99 WHERE id IN (SELECT id FROM short_term_memory_99 ORDER BY timestamp ASC LIMIT 1)"
+                "DELETE FROM short_term_memory WHERE id IN (SELECT id FROM short_term_memory ORDER BY timestamp ASC LIMIT 1)"
             )
         
         await self._conn.execute('''
-            INSERT INTO short_term_memory_99 (
+            INSERT INTO short_term_memory (
                 timestamp, kejadian, lokasi_type, lokasi_detail,
                 aktivitas_nova, aktivitas_mas, perasaan,
                 pakaian_nova, pakaian_mas, pesan_mas, pesan_nova
@@ -565,7 +565,7 @@ class PersistentMemory99:
     async def save_long_term_memory(self, tipe: str, judul: str, konten: str = "", perasaan: str = ""):
         """Simpan long-term memory"""
         await self._conn.execute('''
-            INSERT INTO long_term_memory_99 (tipe, judul, konten, perasaan, timestamp)
+            INSERT INTO long_term_memory (tipe, judul, konten, perasaan, timestamp)
             VALUES (?, ?, ?, ?, ?)
         ''', (tipe, judul, konten[:500], perasaan, time.time()))
         await self._conn.commit()
@@ -577,7 +577,7 @@ class PersistentMemory99:
         loc = brain.get_location_data()
         
         await self._conn.execute('''
-            INSERT OR REPLACE INTO current_state_99 (
+            INSERT OR REPLACE INTO current_state (
                 id, lokasi_type, lokasi_detail, aktivitas_nova, aktivitas_mas,
                 pakaian_nova, pakaian_mas, mood_nova, mood_mas,
                 feelings, relationship, complete_state, updated_at
@@ -601,7 +601,7 @@ class PersistentMemory99:
     async def save_conversation(self, role: str, message: str, state_snapshot: Dict = None):
         """Simpan percakapan"""
         await self._conn.execute('''
-            INSERT INTO conversation_99 (timestamp, role, message, state_snapshot)
+            INSERT INTO conversation (timestamp, role, message, state_snapshot)
             VALUES (?, ?, ?, ?)
         ''', (
             time.time(),
@@ -615,7 +615,7 @@ class PersistentMemory99:
         """Simpan kunjungan lokasi"""
         now = time.time()
         await self._conn.execute('''
-            INSERT INTO location_visits_99 (id, nama, visit_count, last_visit)
+            INSERT INTO location_visits (id, nama, visit_count, last_visit)
             VALUES (?, ?, 1, ?)
             ON CONFLICT(id) DO UPDATE SET
                 visit_count = visit_count + 1,
@@ -629,7 +629,7 @@ class PersistentMemory99:
     
     async def get_recent_conversations(self, limit: int = 20) -> List[Dict]:
         cursor = await self._conn.execute(
-            "SELECT * FROM conversation_99 ORDER BY timestamp DESC LIMIT ?",
+            "SELECT * FROM conversation ORDER BY timestamp DESC LIMIT ?",
             (limit,)
         )
         rows = await cursor.fetchall()
@@ -637,7 +637,7 @@ class PersistentMemory99:
     
     async def get_timeline(self, limit: int = 100) -> List[Dict]:
         cursor = await self._conn.execute(
-            "SELECT * FROM timeline_99 ORDER BY timestamp DESC LIMIT ?",
+            "SELECT * FROM timeline ORDER BY timestamp DESC LIMIT ?",
             (limit,)
         )
         rows = await cursor.fetchall()
@@ -645,7 +645,7 @@ class PersistentMemory99:
     
     async def get_short_term(self) -> List[Dict]:
         cursor = await self._conn.execute(
-            "SELECT * FROM short_term_memory_99 ORDER BY timestamp ASC"
+            "SELECT * FROM short_term_memory ORDER BY timestamp ASC"
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
@@ -653,21 +653,21 @@ class PersistentMemory99:
     async def get_long_term_memories(self, tipe: str = None) -> List[Dict]:
         if tipe:
             cursor = await self._conn.execute(
-                "SELECT * FROM long_term_memory_99 WHERE tipe = ? ORDER BY timestamp DESC",
+                "SELECT * FROM long_term_memory WHERE tipe = ? ORDER BY timestamp DESC",
                 (tipe,)
             )
         else:
             cursor = await self._conn.execute(
-                "SELECT * FROM long_term_memory_99 ORDER BY timestamp DESC"
+                "SELECT * FROM long_term_memory ORDER BY timestamp DESC"
             )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
     
     async def get_stats(self) -> Dict:
         stats = {}
-        tables = ['timeline_99', 'short_term_memory_99', 'long_term_memory_99', 
-                  'conversation_99', 'location_visits_99', 'complete_state_99',
-                  'emotional_state_99', 'relationship_state_99', 'conflict_state_99']
+        tables = ['timeline', 'short_term_memory', 'long_term_memory', 
+                  'conversation', 'location_visits', 'complete_state',
+                  'emotional_state', 'relationship_state', 'conflict_state']
         for table in tables:
             cursor = await self._conn.execute(f"SELECT COUNT(*) FROM {table}")
             count = (await cursor.fetchone())[0]
@@ -681,12 +681,12 @@ class PersistentMemory99:
     # =========================================================================
     
     async def cleanup_old_short_term(self, keep: int = 50):
-        cursor = await self._conn.execute("SELECT COUNT(*) FROM short_term_memory_99")
+        cursor = await self._conn.execute("SELECT COUNT(*) FROM short_term_memory")
         count = (await cursor.fetchone())[0]
         if count > keep:
             to_delete = count - keep
             await self._conn.execute(
-                "DELETE FROM short_term_memory_99 WHERE id IN (SELECT id FROM short_term_memory_99 ORDER BY timestamp ASC LIMIT ?)",
+                "DELETE FROM short_term_memory WHERE id IN (SELECT id FROM short_term_memory ORDER BY timestamp ASC LIMIT ?)",
                 (to_delete,)
             )
             await self._conn.commit()
@@ -703,15 +703,15 @@ class PersistentMemory99:
 # SINGLETON
 # =============================================================================
 
-_anora_persistent_99: Optional[PersistentMemory99] = None
+_anora_persistent: Optional[PersistentMemory] = None
 
 
-async def get_anora_persistent_99() -> PersistentMemory99:
-    global _anora_persistent_99
-    if _anora_persistent_99 is None:
-        _anora_persistent_99 = PersistentMemory99()
-        await _anora_persistent_99.init()
-    return _anora_persistent_99
+async def get_anora_persistent() -> PersistentMemory:
+    global _anora_persistent
+    if _anora_persistent is None:
+        _anora_persistent = PersistentMemory()
+        await _anora_persistent.init()
+    return _anora_persistent
 
 
-anora_persistent_99 = get_anora_persistent_99()
+anora_persistent = get_anora_persistent()

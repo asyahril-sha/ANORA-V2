@@ -7,6 +7,7 @@ SEMUA FITUR NOVA TERSEDIA: Complete State, Arousal, Intimacy, Stamina.
 import time
 import random
 import logging
+import asyncio
 import openai
 from typing import Dict, List, Optional
 from enum import Enum
@@ -29,6 +30,7 @@ class AnoraRoles:
         self.active_role: Optional[RoleType] = None
         self._client = None
         self._persistent = None
+        self._persistent_initialized = False  # Flag untuk inisialisasi
         
         # Data role (identitas statis)
         self.role_data = {
@@ -102,11 +104,15 @@ class AnoraRoles:
         self.last_interaction = {role: time.time() for role in RoleType}
         
         logger.info("🎭 ANORA Roles initialized with RoleBase (all Nova features available)")
+        
+        # ========== INISIALISASI PERSISTENT (ASYNC) ==========
+        # Buat task untuk inisialisasi async (tidak blocking __init__)
+        self._init_task = None
     
-    async def _init_persistent(self):
-        """Inisialisasi persistent memory untuk role"""
-        if self._persistent is not None:
-            return
+    async def _ensure_persistent(self):
+        """Pastikan persistent memory sudah diinisialisasi"""
+        if self._persistent_initialized:
+            return True
         
         try:
             from .memory_persistent import get_anora_persistent
@@ -116,14 +122,25 @@ class AnoraRoles:
             # Load state untuk semua role
             for role_type, instance in self.role_instances.items():
                 await self._persistent.load_role_state(role_type.value, instance)
+                await self._persistent.load_role_memory(role_type.value, instance)
             
-            logger.info("💾 Role persistent memory initialized")
+            self._persistent_initialized = True
+            logger.info("💾 Role persistent memory initialized and loaded")
+            return True
+            
         except Exception as e:
-            logger.warning(f"Role persistent init failed: {e}")
+            logger.error(f"Role persistent init failed: {e}")
+            self._persistent_initialized = False
+            return False
+    
+    async def _ensure_initialized(self):
+        """Pastikan semua role sudah diinisialisasi (public method)"""
+        if not self._persistent_initialized:
+            await self._ensure_persistent()
     
     async def _save_role(self, role_type: RoleType):
         """Simpan satu role ke database"""
-        if not self._persistent:
+        if not self._persistent or not self._persistent_initialized:
             return
         
         try:
@@ -135,7 +152,7 @@ class AnoraRoles:
     
     async def _save_all_roles(self):
         """Simpan semua role ke database"""
-        if not self._persistent:
+        if not self._persistent or not self._persistent_initialized:
             return
         
         for role_type, instance in self.role_instances.items():
@@ -318,9 +335,8 @@ RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
         if self.active_role != role:
             return self.switch_role(role)
         
-        # Inisialisasi persistent jika perlu
-        if self._persistent is None:
-            await self._init_persistent()
+        # ========== PASTIKAN PERSISTENT MEMORY SUDAH SIAP ==========
+        await self._ensure_initialized()
         
         role_instance = self.role_instances[role]
         data = self.role_data[role]
@@ -528,11 +544,21 @@ RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
     
     async def save_all(self):
         """Simpan semua role (untuk dipanggil dari luar)"""
+        if not self._persistent_initialized:
+            await self._ensure_initialized()
         await self._save_all_roles()
     
     async def load_all(self):
         """Load semua role (untuk dipanggil dari luar)"""
-        await self._init_persistent()
+        await self._ensure_initialized()
+    
+    async def init_persistent(self):
+        """Inisialisasi persistent memory (public method)"""
+        await self._ensure_initialized()
+    
+    def is_ready(self) -> bool:
+        """Cek apakah role sudah siap digunakan"""
+        return self._persistent_initialized
 
 
 _anora_roles: Optional[AnoraRoles] = None

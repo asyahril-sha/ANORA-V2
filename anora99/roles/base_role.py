@@ -18,12 +18,12 @@ from typing import Dict, List, Optional, Any, Tuple
 from ..emotional_engine import EmotionalEngine
 from ..relationship import RelationshipManager
 from ..conflict_engine import ConflictEngine
-from ..roleplay_integration import StaminaSystem99, IntimacySession99
+from ..roleplay_integration import StaminaSystem, IntimacySession
 
 logger = logging.getLogger(__name__)
 
 
-class BaseRole99:
+class BaseRole:
     """
     Base class untuk semua role.
     Setiap role punya semua engine seperti Nova.
@@ -45,8 +45,8 @@ class BaseRole99:
         self.emotional = EmotionalEngine()
         self.relationship = RelationshipManager()
         self.conflict = ConflictEngine()
-        self.stamina = StaminaSystem99()
-        self.intimacy = IntimacySession99(self.stamina)
+        self.stamina = StaminaSystem()
+        self.intimacy = IntimacySession(self.stamina)
         
         # ========== ROLE-SPECIFIC STATE ==========
         self.clothing = self._init_clothing(default_clothing)

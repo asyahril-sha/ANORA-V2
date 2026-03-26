@@ -233,7 +233,7 @@ class AnoraWorker:
             await persistent.set_state('emotional', json.dumps(emo.to_dict()))
             
             # Save relationship state
-            await persistent.set_state('relationship', json.dumps(rel.to_dict()))
+            await persistent.save_relationship_state(rel)
             
             # Save conflict state
             await persistent.set_state('conflict', json.dumps(conflict.to_dict()))

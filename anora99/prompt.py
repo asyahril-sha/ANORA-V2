@@ -25,7 +25,7 @@ from .conflict_engine import ConflictType
 logger = logging.getLogger(__name__)
 
 
-class PromptBuilder99:
+class PromptBuilder:
     """
     Prompt Builder untuk ANORA 9.9.
     Membangun prompt lengkap dengan semua konteks.
@@ -612,14 +612,14 @@ Respons: sakit hati, pendek, nunggu Mas perhatian.
 # SINGLETON
 # =============================================================================
 
-_prompt_builder_99: Optional['PromptBuilder99'] = None
+_prompt_builder: Optional['PromptBuilder'] = None
 
 
-def get_prompt_builder_99() -> PromptBuilder99:
-    global _prompt_builder_99
-    if _prompt_builder_99 is None:
-        _prompt_builder_99 = PromptBuilder99()
-    return _prompt_builder_99
+def get_prompt_builder() -> PromptBuilder:
+    global _prompt_builder
+    if _prompt_builder is None:
+        _prompt_builder = PromptBuilder()
+    return _prompt_builder
 
 
-prompt_builder_99 = get_prompt_builder_99()
+prompt_builder = get_prompt_builder()

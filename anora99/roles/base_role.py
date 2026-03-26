@@ -7,11 +7,13 @@ Semua role punya:
 - Stamina System
 - Intimacy System
 - Memory
+
+Akses konten berdasarkan level (sama seperti Nova), bukan berdasarkan role type.
 """
 
 import time
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 
 from ..emotional_engine import EmotionalEngine
 from ..relationship import RelationshipManager
@@ -103,6 +105,10 @@ class BaseRole99:
             self.relationship.achieve_milestone('first_hug')
             milestones.append('first_hug')
         
+        if 'cium' in msg_lower and not self.relationship.milestones.get('first_kiss', False):
+            self.relationship.achieve_milestone('first_kiss')
+            milestones.append('first_kiss')
+        
         # Update level
         new_level, level_up = self.relationship.update_level(
             self.emotional.sayang,
@@ -169,6 +175,44 @@ class BaseRole99:
         self.important_moments.append(moment)
         if len(self.important_moments) > 20:
             self.important_moments = self.important_moments[-20:]
+    
+    def can_do_action(self, action: str) -> Tuple[bool, str]:
+        """
+        Cek apakah role boleh melakukan aksi tertentu berdasarkan fase hubungan.
+        Sama seperti Nova.
+        """
+        unlock = self.relationship.get_current_unlock()
+        
+        action_map = {
+            'flirt': unlock.boleh_flirt,
+            'pegang_tangan': unlock.boleh_pegang_tangan,
+            'peluk': unlock.boleh_peluk,
+            'cium': unlock.boleh_cium,
+            'buka_baju': unlock.boleh_buka_baju,
+            'vulgar': unlock.boleh_vulgar,
+            'intim': unlock.boleh_intim,
+            'panggil_sayang': unlock.boleh_panggil_sayang
+        }
+        
+        if action not in action_map:
+            return True, "Boleh"
+        
+        if action_map[action]:
+            return True, "Boleh"
+        
+        phase = self.relationship.phase
+        reasons = {
+            'flirt': f"Fase {phase.value}, belum waktunya flirt.",
+            'pegang_tangan': f"Fase {phase.value}, belum waktunya pegang tangan.",
+            'peluk': f"Fase {phase.value}, belum waktunya peluk.",
+            'cium': f"Fase {phase.value}, belum waktunya cium.",
+            'buka_baju': f"Fase {phase.value}, belum waktunya buka baju.",
+            'vulgar': f"Fase {phase.value}, belum waktunya vulgar.",
+            'intim': f"Fase {phase.value}, belum waktunya intim.",
+            'panggil_sayang': f"Fase {phase.value}, belum waktunya panggil sayang."
+        }
+        
+        return False, reasons.get(action, "Belum waktunya.")
     
     def get_context_for_prompt(self) -> str:
         """Dapatkan konteks untuk prompt AI"""
@@ -249,6 +293,14 @@ KONFLIK:
             parts.append("tanpa celana dalam")
         
         return ", ".join(parts)
+    
+    def get_greeting(self) -> str:
+        """Dapatkan greeting default (override di subclass)"""
+        return f"{self.panggilan}... halo."
+    
+    def get_conflict_response(self) -> str:
+        """Respons saat konflik default"""
+        return "*diam sebentar*"
     
     def to_dict(self) -> Dict:
         """Serialize ke dict untuk database"""

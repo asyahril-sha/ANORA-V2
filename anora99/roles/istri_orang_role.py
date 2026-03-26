@@ -4,10 +4,10 @@ Istri orang yang tau Mas punya Nova.
 Akses konten berdasarkan level (sama seperti Nova).
 """
 
-from .base_role import BaseRole99
+from .base_role import BaseRole
 
 
-class IstriOrangRole(BaseRole99):
+class IstriOrangRole(BaseRole9):
     """
     Rina - Istri orang.
     Punya kebutuhan perhatian dan iri ke Nova, tetapi tidak membatasi aksi.

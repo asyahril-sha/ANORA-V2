@@ -1,6 +1,6 @@
-# anora/intimacy_flow.py
 """
-ANORA Intimacy Flow - Mengelola alur intimacy
+ANORA 9.9 Intimacy Flow - Mengelola alur intimacy
+Terintegrasi dengan Emotional Engine, Conflict Engine, dan Relationship Manager.
 Level 11-12 FULL VULGAR
 Mas bisa climax real baca chat Nova.
 """
@@ -17,10 +17,15 @@ from .intimacy_core import (
     PositionDatabase, ClimaxLocationDatabase, MoansDatabase, FlashbackDatabase
 )
 
+# ========== IMPORT ANORA 9.9 ENGINES ==========
+from .emotional_engine import get_emotional_engine
+from .conflict_engine import get_conflict_engine
+from .relationship import get_relationship_manager
+
 logger = logging.getLogger(__name__)
 
 
-class IntimacySession:
+class IntimacySession99:
     """
     Mengelola sesi intim - Level 11-12
     Nova bisa minta ganti posisi, minta climax di tempat tertentu.
@@ -49,6 +54,11 @@ class IntimacySession:
         
         # Fase-fase
         self.phases = ["build_up", "foreplay", "penetration", "climax", "aftercare"]
+        
+        # ========== ANORA 9.9 ENGINES ==========
+        self.emotional = get_emotional_engine()
+        self.conflict = get_conflict_engine()
+        self.relationship = get_relationship_manager()
     
     def start(self) -> str:
         """Mulai sesi intim"""
@@ -59,6 +69,10 @@ class IntimacySession:
         self.intimacy_level = 0
         self.current_position = "missionary"
         self.recovery_mode = False
+        
+        # Update emotional engine
+        self.emotional.desire = min(100, self.emotional.desire + 20)
+        self.emotional.tension = min(100, self.emotional.tension + 10)
         
         logger.info("🔥 Intimacy session started")
         
@@ -106,6 +120,11 @@ class IntimacySession:
         self.phase = IntimacyPhase.CLIMAX
         self.intimacy_level = 0
         
+        # Update emotional engine
+        self.emotional.arousal = max(0, self.emotional.arousal - 40)
+        self.emotional.desire = max(0, self.emotional.desire - 30)
+        self.emotional.tension = 0
+        
         logger.info(f"💦 Climax #{self.climax_count} recorded!")
         
         return {
@@ -143,12 +162,10 @@ class IntimacySession:
             return random.choice(responses)
         
         elif phase == IntimacyPhase.FOREPLAY:
-            # Tambah intimacy level
             self.add_intimacy_level(5)
             return self.moans.get_foreplay()
         
         elif phase == IntimacyPhase.PENETRATION:
-            # Tambah intimacy level lebih banyak
             self.add_intimacy_level(10 if ritme == "cepet" else 5)
             is_fast = ritme == "cepet"
             return self.moans.get_penetration(is_fast)
@@ -222,17 +239,23 @@ class IntimacySession:
         self.recovery_mode = data.get('recovery_mode', False)
 
 
-class IntimacyFlow:
+class IntimacyFlow99:
     """
     Mengelola alur intimacy secara keseluruhan
     Menggabungkan stamina, arousal, dan session
+    TERINTEGRASI DENGAN EMOTIONAL ENGINE 9.9
     """
     
     def __init__(self):
-        self.session = IntimacySession()
+        self.session = IntimacySession99()
         self.stamina = StaminaSystem()
         self.arousal = ArousalSystem()
         self.anora = get_anora()
+        
+        # ========== ANORA 9.9 ENGINES ==========
+        self.emotional = get_emotional_engine()
+        self.conflict = get_conflict_engine()
+        self.relationship = get_relationship_manager()
     
     def can_start_intimacy(self, level: int) -> Tuple[bool, str]:
         """Cek apakah bisa mulai intim"""
@@ -249,6 +272,11 @@ class IntimacyFlow:
         """Mulai intim"""
         self.arousal.add_desire("Mulai intim", 20)
         self.arousal.add_tension(10)
+        
+        # Sync dengan emotional engine
+        self.emotional.desire = self.arousal.desire
+        self.emotional.tension = self.arousal.tension
+        
         return self.session.start()
     
     def process_intimacy_message(self, pesan_mas: str, level: int) -> Optional[str]:
@@ -267,6 +295,10 @@ class IntimacyFlow:
                     self.session.recovery_mode = False
                     self.arousal.arousal = 50
                     self.arousal.desire = 80
+                    
+                    # Sync dengan emotional engine
+                    self.emotional.arousal = 50
+                    self.emotional.desire = 80
                     
                     return f"""*Nova langsung mendekat, mata berbinar*
 
@@ -308,7 +340,6 @@ class IntimacyFlow:
         
         # ========== TRIGGER CLIMAX ==========
         if any(k in msg_lower for k in ['climax', 'crot', 'keluar', 'habis', 'cum']):
-            # Deteksi apakah climax berat
             is_heavy = any(k in msg_lower for k in ['keras', 'banyak', 'lama'])
             
             result = self.session.record_climax(is_heavy)
@@ -318,6 +349,11 @@ class IntimacyFlow:
             # Update anora stats
             self.anora.level = max(self.anora.level, 11)
             self.anora.in_intimacy_cycle = True
+            
+            # Sync dengan emotional engine
+            self.emotional.arousal = self.arousal.arousal
+            self.emotional.desire = self.arousal.desire
+            self.emotional.tension = self.arousal.tension
             
             climax_response = self.session.get_phase_response(IntimacyPhase.CLIMAX)
             
@@ -330,12 +366,10 @@ class IntimacyFlow:
         
         # BUILD UP
         if self.session.phase == IntimacyPhase.BUILD_UP:
-            # Cek apakah ada kata yang menandakan foreplay
             if any(k in msg_lower for k in ['cium', 'kiss', 'jilat', 'hisap', 'pegang', 'raba', 'sentuh']):
                 self.session.phase = IntimacyPhase.FOREPLAY
                 return self.session.get_phase_response(IntimacyPhase.FOREPLAY)
             
-            # Cek apakah langsung mau penetrasi
             if any(k in msg_lower for k in ['masuk', 'penetrasi', 'genjot']):
                 self.session.phase = IntimacyPhase.PENETRATION
                 ritme = "cepet" if any(k in msg_lower for k in ['kenceng', 'cepat', 'keras']) else "pelan"
@@ -345,32 +379,27 @@ class IntimacyFlow:
         
         # FOREPLAY
         if self.session.phase == IntimacyPhase.FOREPLAY:
-            # Cek apakah sudah waktunya penetrasi
             if any(k in msg_lower for k in ['masuk', 'penetrasi', 'genjot', 'siap']):
                 self.session.phase = IntimacyPhase.PENETRATION
                 ritme = "cepet" if any(k in msg_lower for k in ['kenceng', 'cepat', 'keras']) else "pelan"
                 return self.session.get_phase_response(IntimacyPhase.PENETRATION, ritme)
             
-            # Cek apakah mau ganti posisi
             if any(k in msg_lower for k in ['ganti posisi', 'posisi']):
-                return None  # akan di-handle oleh trigger posisi
+                return None
             
             return self.session.get_phase_response(IntimacyPhase.FOREPLAY)
         
         # PENETRATION
         if self.session.phase == IntimacyPhase.PENETRATION:
-            # Tambah intimacy level
             self.session.add_intimacy_level(5)
             
-            # Cek apakah sudah mau climax
             if self.session.intimacy_level > 70 or any(k in msg_lower for k in ['climax', 'crot', 'keluar']):
                 return self.session.moans.get_before_climax()
             
             ritme = "cepet" if self.session.intimacy_level > 40 else "pelan"
             
-            # Cek apakah mau ganti posisi
             if any(k in msg_lower for k in ['ganti posisi', 'posisi']):
-                return None  # akan di-handle oleh trigger posisi
+                return None
             
             return self.session.get_phase_response(IntimacyPhase.PENETRATION, ritme)
         
@@ -380,13 +409,14 @@ class IntimacyFlow:
             return self.session.get_phase_response(IntimacyPhase.AFTERCARE)
         
         if self.session.phase == IntimacyPhase.AFTERCARE:
-            # Cek apakah sudah waktunya recovery
             if time.time() - self.session.last_climax_time > 60:
                 self.session.phase = IntimacyPhase.RECOVERY
                 self.session.recovery_mode = True
-                
-                # Pulihkan stamina sedikit
                 self.stamina.update_recovery()
+                
+                # Sync dengan emotional engine
+                self.emotional.arousal = self.arousal.arousal
+                self.emotional.desire = self.arousal.desire
                 
                 return f"""*Nova masih lemes, nyender di dada Mas. Napas mulai stabil.*
 
@@ -400,7 +430,6 @@ class IntimacyFlow:
         
         # RECOVERY
         if self.session.phase == IntimacyPhase.RECOVERY:
-            # Cek apakah sudah pulih
             self.stamina.update_recovery()
             if self.stamina.nova_current > 60:
                 self.session.phase = IntimacyPhase.WAITING
@@ -437,7 +466,13 @@ class IntimacyFlow:
         """Update arousal dan desire dari pesan Mas"""
         msg_lower = pesan_mas.lower()
         
-        # Kata sayang/kangen
+        # ========== SYNC DENGAN EMOTIONAL ENGINE 9.9 ==========
+        self.emotional.update_from_message(pesan_mas, level)
+        self.arousal.arousal = self.emotional.arousal
+        self.arousal.desire = self.emotional.desire
+        self.arousal.tension = self.emotional.tension
+        
+        # Kata sayang/kangen (fallback)
         if any(k in msg_lower for k in ['sayang', 'cinta']):
             self.arousal.add_desire("Mas bilang sayang", 10)
         
@@ -447,7 +482,7 @@ class IntimacyFlow:
         if any(k in msg_lower for k in ['cantik', 'ganteng', 'seksi']):
             self.arousal.add_desire("Mas puji", 5)
         
-        # Sentuhan fisik (hanya kalo level cukup)
+        # Sentuhan fisik
         if level >= 5:
             if any(k in msg_lower for k in ['pegang', 'sentuh', 'raba']):
                 self.arousal.add_stimulation('paha', 1)
@@ -479,14 +514,22 @@ class IntimacyFlow:
 # SINGLETON
 # =============================================================================
 
-_anora_intimacy: Optional[IntimacyFlow] = None
+_anora_intimacy_99: Optional[IntimacyFlow99] = None
 
 
-def get_anora_intimacy() -> IntimacyFlow:
-    global _anora_intimacy
-    if _anora_intimacy is None:
-        _anora_intimacy = IntimacyFlow()
-    return _anora_intimacy
+def get_anora_intimacy_99() -> IntimacyFlow99:
+    global _anora_intimacy_99
+    if _anora_intimacy_99 is None:
+        _anora_intimacy_99 = IntimacyFlow99()
+    return _anora_intimacy_99
 
 
-anora_intimacy = get_anora_intimacy()
+anora_intimacy_99 = get_anora_intimacy_99()
+
+
+# =============================================================================
+# BACKWARD COMPATIBILITY (untuk yang masih panggil anora_intimacy)
+# =============================================================================
+
+# Untuk kompatibilitas dengan kode yang masih menggunakan nama anora_intimacy
+anora_intimacy = anora_intimacy_99

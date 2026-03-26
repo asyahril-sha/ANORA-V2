@@ -559,8 +559,14 @@ Kirim **/batal** buat balik ke mode chat.
         if arousal_gain > 0:
             self.ai.arousal.add_stimulation('mental', arousal_gain // 10)
             self.ai.arousal.add_desire(f'Atmosphere: {atmosphere}', arousal_gain)
+            
+            # ========== TAMBAHKAN INI ==========
+            # Sync ke brain feelings (biar konsisten)
             self.brain.feelings.arousal = self.ai.arousal.arousal
-            logger.info(f"💕 Total arousal +{arousal_gain} from situation analysis")
+            self.brain.feelings.desire = self.ai.arousal.desire
+            self.brain.feelings.tension = self.ai.arousal.tension
+            
+            logger.info(f"💕 Arousal synced to brain: {self.brain.feelings.arousal:.0f}%")
         
         # ========== DETEKSI PERINTAH INTIM ==========
         
@@ -796,17 +802,22 @@ Kirim **/batal** buat balik ke mode chat.
         state = self.brain.get_current_state()
         loc = self.brain.get_location_data()
         complete = self.brain.complete_state
-        
+    
+        # SAYANG - dari brain (update dari interaksi)
         bar_sayang = "💜" * int(self.brain.feelings.sayang / 10) + "🖤" * (10 - int(self.brain.feelings.sayang / 10))
-        bar_desire = "🔥" * int(self.brain.feelings.desire / 10) + "⚪" * (10 - int(self.brain.feelings.desire / 10))
-        
+    
         # Stamina bars
         nova_bar = self.stamina.get_nova_bar()
         mas_bar = self.stamina.get_mas_bar()
-        
-        # Arousal status
+    
+        # AROUSAL & DESIRE - dari ai.arousal (update dari analisis situasi)
         arousal_state = self.ai.arousal.get_state()
-        arousal_bar = "🔥" * int(arousal_state['arousal'] / 10) + "⚪" * (10 - int(arousal_state['arousal'] / 10))
+        arousal = arousal_state['arousal']
+        desire = arousal_state['desire']
+        tension = arousal_state['tension']
+    
+        arousal_bar = "🔥" * int(arousal / 10) + "⚪" * (10 - int(arousal / 10))
+        desire_bar = "🔥" * int(desire / 10) + "⚪" * (10 - int(desire / 10))
         
         # Format pakaian dari complete state
         mas_clothing = []

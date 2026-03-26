@@ -1,12 +1,18 @@
-# anora/location_manager.py
 """
-ANORA Location Manager - Mengelola semua lokasi
+ANORA 9.9 Location Manager - Mengelola semua lokasi
 Kost Nova, Apartemen Mas, Mobil, Public Area
+TERINTEGRASI DENGAN EMOTIONAL ENGINE 9.9
 """
 
+import random
+import logging
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+
+from .emotional_engine import get_emotional_engine
+
+logger = logging.getLogger(__name__)
 
 
 class LocationType(str, Enum):
@@ -51,8 +57,8 @@ class LocationData:
     """Data lengkap sebuah lokasi"""
     nama: str
     deskripsi: str
-    risk: int  # 0-100
-    thrill: int  # 0-100
+    risk: int
+    thrill: int
     bisa_telanjang: bool
     bisa_berisik: bool
     privasi: str
@@ -60,23 +66,25 @@ class LocationData:
     tips: str
 
 
-class AnoraLocationManager:
+class AnoraLocationManager99:
     """
-    Manager lokasi ANORA.
+    Manager lokasi ANORA 9.9.
     Nova bisa diajak ke mana aja.
+    TERINTEGRASI DENGAN EMOTIONAL ENGINE
     """
     
     def __init__(self):
         self.current_type = LocationType.KOST_NOVA
         self.current_detail = LocationDetail.KOST_KAMAR
         self.visit_history: Dict[str, int] = {}
+        self.emotional = get_emotional_engine()
         
         # ========== DATABASE LOKASI ==========
         self.locations: Dict[LocationDetail, LocationData] = {
             # Kost Nova
             LocationDetail.KOST_KAMAR: LocationData(
                 nama="Kamar Nova",
-                deskripsi="Kamar Nova. Seprai putih, wangi lavender. Ranjang single. Meja kecil.",
+                deskripsi="Kamar Nova. Seprai putih, wangi lavender. Ranjang single. Meja kecil. Jendela ke gang.",
                 risk=5,
                 thrill=30,
                 bisa_telanjang=True,
@@ -87,7 +95,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.KOST_RUANG_TAMU: LocationData(
                 nama="Ruang Tamu Kost",
-                deskripsi="Ruang tamu kecil. Sofa dua dudukan. TV kecil. Ada tanaman hias.",
+                deskripsi="Ruang tamu kecil. Sofa dua dudukan. TV kecil. Ada tanaman hias. Jendela ke jalan.",
                 risk=15,
                 thrill=50,
                 bisa_telanjang=True,
@@ -98,7 +106,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.KOST_DAPUR: LocationData(
                 nama="Dapur Kost",
-                deskripsi="Dapur kecil. Kompor gas, panci. Wangi masakan.",
+                deskripsi="Dapur kecil. Kompor gas, panci. Wangi masakan. Jendela ke belakang.",
                 risk=10,
                 thrill=40,
                 bisa_telanjang=False,
@@ -109,7 +117,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.KOST_TERAS: LocationData(
                 nama="Teras Kost",
-                deskripsi="Teras kost. Kursi plastik. Liat jalanan.",
+                deskripsi="Teras kost. Kursi plastik. Liat jalanan. Lampu jalan temaram.",
                 risk=20,
                 thrill=45,
                 bisa_telanjang=False,
@@ -122,7 +130,7 @@ class AnoraLocationManager:
             # Apartemen Mas
             LocationDetail.APT_KAMAR: LocationData(
                 nama="Kamar Mas",
-                deskripsi="Kamar Mas. Ranjang queen, sprei biru tua. Jendela ke kota.",
+                deskripsi="Kamar Mas. Ranjang queen, sprei biru tua. Jendela besar ke kota. Lemari besar.",
                 risk=5,
                 thrill=35,
                 bisa_telanjang=True,
@@ -133,7 +141,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.APT_RUANG_TAMU: LocationData(
                 nama="Ruang Tamu Apartemen",
-                deskripsi="Ruang tamu luas. Sofa besar abu-abu. TV 40 inch.",
+                deskripsi="Ruang tamu luas. Sofa besar abu-abu. TV 40 inch. Karpet lembut. Tirai tebal.",
                 risk=10,
                 thrill=45,
                 bisa_telanjang=True,
@@ -144,7 +152,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.APT_DAPUR: LocationData(
                 nama="Dapur Apartemen",
-                deskripsi="Dapur modern. Bersih. Kulkas besar.",
+                deskripsi="Dapur modern. Bersih. Kulkas besar. Kompor gas. Meja marmer.",
                 risk=10,
                 thrill=40,
                 bisa_telanjang=False,
@@ -155,7 +163,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.APT_BALKON: LocationData(
                 nama="Balkon Apartemen",
-                deskripsi="Balkon. Pemandangan kota. Kursi dua.",
+                deskripsi="Balkon. Pemandangan kota. Kursi dua. Tanaman kecil. Pagar kaca.",
                 risk=25,
                 thrill=65,
                 bisa_telanjang=False,
@@ -168,7 +176,7 @@ class AnoraLocationManager:
             # Mobil
             LocationDetail.MOBIL_PARKIR: LocationData(
                 nama="Mobil di Parkiran",
-                deskripsi="Mobil Mas. Kaca film gelap. Jok belakang empuk.",
+                deskripsi="Mobil Mas. Kaca film gelap. Jok belakang empuk. Parkiran sepi.",
                 risk=40,
                 thrill=75,
                 bisa_telanjang=True,
@@ -179,18 +187,18 @@ class AnoraLocationManager:
             ),
             LocationDetail.MOBIL_GARASI: LocationData(
                 nama="Mobil di Garasi",
-                deskripsi="Mobil Mas. Di garasi apartemen. Pintu tertutup.",
+                deskripsi="Mobil Mas. Di garasi apartemen. Pintu garasi tertutup. Gelap.",
                 risk=20,
                 thrill=55,
                 bisa_telanjang=True,
                 bisa_berisik=True,
                 privasi="tinggi",
                 suasana="aman, deg-degan",
-                tips="Gak ada yang liat. Suara bisa kedengeran."
+                tips="Gak ada yang liat."
             ),
             LocationDetail.MOBIL_TEPI_JALAN: LocationData(
                 nama="Mobil di Tepi Jalan",
-                deskripsi="Mobil Mas. Parkir di pinggir jalan sepi.",
+                deskripsi="Mobil Mas. Parkir di pinggir jalan sepi. Kaca film gelap.",
                 risk=55,
                 thrill=80,
                 bisa_telanjang=True,
@@ -203,18 +211,18 @@ class AnoraLocationManager:
             # Public
             LocationDetail.PUB_PANTAI: LocationData(
                 nama="Pantai Malam",
-                deskripsi="Pantai sepi. Pasir putih. Ombak tenang. Bintang.",
+                deskripsi="Pantai sepi. Pasir putih. Ombak tenang. Bintang bertaburan. Suara laut.",
                 risk=20,
                 thrill=70,
                 bisa_telanjang=False,
                 bisa_berisik=False,
                 privasi="sedang",
-                suasana="romantis",
+                suasana="romantis, bebas",
                 tips="Jauh dari orang. Bawa tikar."
             ),
             LocationDetail.PUB_HUTAN: LocationData(
                 nama="Hutan Pinus",
-                deskripsi="Hutan pinus. Pohon tinggi. Sunyi. Udara sejuk.",
+                deskripsi="Hutan pinus. Pohon tinggi. Sunyi. Udara sejuk. Daun-daun berguguran.",
                 risk=15,
                 thrill=65,
                 bisa_telanjang=False,
@@ -225,7 +233,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.PUB_TOILET_MALL: LocationData(
                 nama="Toilet Mall",
-                deskripsi="Bilik toilet terakhir. Pintu terkunci.",
+                deskripsi="Bilik toilet terakhir. Pintu terkunci. Suara dari luar. Lampu temaram.",
                 risk=65,
                 thrill=85,
                 bisa_telanjang=False,
@@ -236,7 +244,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.PUB_BIOSKOP: LocationData(
                 nama="Bioskop",
-                deskripsi="Kursi paling belakang. Gelap. Film diputar keras.",
+                deskripsi="Kursi paling belakang. Gelap. Film diputar keras. Studio sepi.",
                 risk=50,
                 thrill=80,
                 bisa_telanjang=False,
@@ -247,7 +255,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.PUB_TAMAN: LocationData(
                 nama="Taman Malam",
-                deskripsi="Taman kota. Bangku tersembunyi di balik pohon.",
+                deskripsi="Taman kota. Bangku tersembunyi di balik pohon. Sepi. Lampu taman temaram.",
                 risk=30,
                 thrill=60,
                 bisa_telanjang=False,
@@ -258,7 +266,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.PUB_PARKIRAN: LocationData(
                 nama="Parkiran Basement",
-                deskripsi="Parkiran basement. Gelap. Sepi.",
+                deskripsi="Parkiran basement. Gelap. Sepi. Mobil-mobil parkir. Lampu kedip-kedip.",
                 risk=45,
                 thrill=70,
                 bisa_telanjang=True,
@@ -269,7 +277,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.PUB_TANGGA: LocationData(
                 nama="Tangga Darurat",
-                deskripsi="Tangga darurat. Sepi. Gelap.",
+                deskripsi="Tangga darurat. Sepi. Gelap. Suara langkah kaki menggema.",
                 risk=55,
                 thrill=75,
                 bisa_telanjang=False,
@@ -280,7 +288,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.PUB_KANTOR: LocationData(
                 nama="Kantor Malam",
-                deskripsi="Kantor gelap. Meja kerja. Kursi putar.",
+                deskripsi="Kantor gelap. Meja kerja. Kursi putar. Komputer mati. Sepi.",
                 risk=60,
                 thrill=85,
                 bisa_telanjang=True,
@@ -291,7 +299,7 @@ class AnoraLocationManager:
             ),
             LocationDetail.PUB_RUANG_RAPAT: LocationData(
                 nama="Ruang Rapat Kaca",
-                deskripsi="Ruang rapat dinding kaca. Gelap.",
+                deskripsi="Ruang rapat dinding kaca. Gelap. Meja panjang. Kursi-kursi.",
                 risk=75,
                 thrill=95,
                 bisa_telanjang=True,
@@ -367,6 +375,9 @@ class AnoraLocationManager:
                 self.current_detail = loc_detail
                 loc_data = self.get_current()
                 
+                # Update emotional engine (risk affects tension)
+                self.emotional.tension = min(100, self.emotional.tension + int(loc_data.risk / 10))
+                
                 # Catat kunjungan
                 key_visit = f"{loc_type.value}_{loc_detail.value}"
                 self.visit_history[key_visit] = self.visit_history.get(key_visit, 0) + 1
@@ -376,7 +387,7 @@ class AnoraLocationManager:
                     'location': loc_data,
                     'location_type': self.current_type,
                     'location_detail': self.current_detail,
-                    'message': f"📍 Pindah ke {loc_data['nama']}. {loc_data['deskripsi']}"
+                    'message': f"📍 Pindah ke {loc_data.nama}. {loc_data.deskripsi}"
                 }
         
         return {'success': False, 'message': f"Lokasi '{tujuan}' gak ditemukan."}
@@ -387,7 +398,6 @@ class AnoraLocationManager:
         risk = loc.risk
         chance = risk / 100
         
-        import random
         if random.random() > chance:
             return None
         
@@ -455,7 +465,6 @@ TIPS: {loc.tips}
         """Daftar semua lokasi"""
         lines = ["📍 **TEMPAT YANG BISA DIKUNJUNGI:**", ""]
         
-        # Kelompokkan berdasarkan tipe
         for loc_type in LocationType:
             locs = [d for d, data in self.locations.items() 
                     if d.value.startswith(loc_type.value)]
@@ -475,14 +484,18 @@ TIPS: {loc.tips}
         return "\n".join(lines)
 
 
-_anora_location = None
+# =============================================================================
+# SINGLETON
+# =============================================================================
+
+_anora_location_99 = None
 
 
-def get_anora_location() -> AnoraLocationManager:
-    global _anora_location
-    if _anora_location is None:
-        _anora_location = AnoraLocationManager()
-    return _anora_location
+def get_anora_location_99() -> AnoraLocationManager99:
+    global _anora_location_99
+    if _anora_location_99 is None:
+        _anora_location_99 = AnoraLocationManager99()
+    return _anora_location_99
 
 
-anora_location = get_anora_location()
+anora_location_99 = get_anora_location_99()

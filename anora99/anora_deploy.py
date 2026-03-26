@@ -10,10 +10,18 @@ import json
 import logging
 import shutil
 import time
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 from aiohttp import web
+
+# Import Telegram modules
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler,
+    filters, ContextTypes
+)
 
 # Setup logging
 logging.basicConfig(
@@ -21,7 +29,7 @@ logging.basicConfig(
     format='%(asctime)s | %(levelname)-5s | %(name)s | %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger("ANORA")
+logger = logging.getLogger("ANORA99")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -29,24 +37,26 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import get_settings
 
 # =============================================================================
-# IMPORT ANORA 9.9 COMPONENTS
+# IMPORT ANORA 9.9 COMPONENTS (from anora99 folder, NOT anora)
 # =============================================================================
 
 ANORA_AVAILABLE = False
 try:
-    from anora.emotional_engine import get_emotional_engine
-    from anora.relationship import get_relationship_manager
-    from anora.conflict_engine import get_conflict_engine
-    from anora.brain import get_anora_brain
-    from anora.roleplay_ai import get_anora_roleplay_ai
-    from anora.roleplay_integration import get_anora_roleplay
-    from anora.roles.role_manager import get_role_manager
-    from anora.worker import get_anora_worker
-    from anora.memory_persistent import get_anora_persistent
+    from anora99.emotional_engine import get_emotional_engine
+    from anora99.relationship import get_relationship_manager
+    from anora99.conflict_engine import get_conflict_engine
+    from anora99.brain import get_anora_brain
+    from anora99.roleplay_ai import get_anora_roleplay_ai
+    from anora99.roleplay_integration import get_anora_roleplay
+    from anora99.roles.role_manager import get_role_manager
+    from anora99.worker import get_anora_worker
+    from anora99.memory_persistent import get_anora_persistent
     ANORA_AVAILABLE = True
     logger.info("✅ ANORA 9.9 modules loaded")
 except ImportError as e:
     logger.warning(f"⚠️ ANORA 9.9 not available: {e}")
+    import traceback
+    traceback.print_exc()
 
 # =============================================================================
 # IMPORT AMORIA COMPONENTS (fallback)
@@ -66,8 +76,8 @@ except ImportError as e:
 # =============================================================================
 
 _application = None
-_user_modes: Dict[int, Dict] = {}  # user_id -> {'mode': 'chat'/'roleplay'/'role'/'paused', 'active_role': None, 'previous_mode': None}
-_backup_dir = Path("backups_anora")
+_user_modes: Dict[int, Dict] = {}
+_backup_dir = Path("backups_anora99")
 _backup_dir.mkdir(exist_ok=True)
 
 
@@ -111,42 +121,50 @@ async def anora_start_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     set_user_mode(user_id, 'chat')
     
     # Get initial stats
-    brain = get_anora_brain()
-    emotional = get_emotional_engine()
-    relationship = get_relationship_manager()
-    
-    await update.message.reply_text(
-        f"💜 **ANORA 9.9 - Virtual Human dengan Jiwa** 💜\n\n"
-        f"**Status Saat Ini:**\n"
-        f"• Fase: {relationship.phase.value.upper()} (Level {relationship.level}/12)\n"
-        f"• Gaya: {emotional.get_current_style().value.upper()}\n"
-        f"• Sayang: {emotional.sayang:.0f}% | Rindu: {emotional.rindu:.0f}%\n\n"
-        f"**Mode Chat (ngobrol biasa):**\n"
-        f"• /nova - Panggil Nova\n"
-        f"• /status - Lihat keadaan Nova lengkap\n"
-        f"• /flashback - Flashback ke momen indah\n\n"
-        f"**Mode Roleplay (beneran ketemu):**\n"
-        f"• /roleplay - Aktifkan mode roleplay\n"
-        f"• /statusrp - Lihat status roleplay lengkap\n"
-        f"• /pindah [tempat] - Pindah lokasi\n\n"
-        f"**Tempat yang bisa dikunjungi:**\n"
-        f"kost, apartemen, mobil, pantai, hutan, toilet mall, bioskop, taman\n\n"
-        f"**Role Lain (Mereka TAU Mas punya Nova):**\n"
-        f"• /role ipar - IPAR (Sari)\n"
-        f"• /role teman_kantor - Teman Kantor (Dita)\n"
-        f"• /role pelakor - Pelakor (Vina)\n"
-        f"• /role istri_orang - Istri Orang (Rina)\n\n"
-        f"**Manajemen Sesi:**\n"
-        f"• /pause - Hentikan sesi sementara (memory tetap)\n"
-        f"• /resume - Lanjutkan sesi\n"
-        f"• /batal - Kembali ke mode chat\n\n"
-        f"**Backup & Restore:**\n"
-        f"• /backup - Backup database ANORA\n"
-        f"• /restore - Restore database\n"
-        f"• /listbackup - Lihat daftar backup\n\n"
-        f"Apa yang Mas mau? 💜",
-        parse_mode='Markdown'
-    )
+    if ANORA_AVAILABLE:
+        brain = get_anora_brain()
+        emotional = get_emotional_engine()
+        relationship = get_relationship_manager()
+        
+        await update.message.reply_text(
+            f"💜 **ANORA 9.9 - Virtual Human dengan Jiwa** 💜\n\n"
+            f"**Status Saat Ini:**\n"
+            f"• Fase: {relationship.phase.value.upper()} (Level {relationship.level}/12)\n"
+            f"• Gaya: {emotional.get_current_style().value.upper()}\n"
+            f"• Sayang: {emotional.sayang:.0f}% | Rindu: {emotional.rindu:.0f}%\n\n"
+            f"**Mode Chat (ngobrol biasa):**\n"
+            f"• /nova - Panggil Nova\n"
+            f"• /status - Lihat keadaan Nova lengkap\n"
+            f"• /flashback - Flashback ke momen indah\n\n"
+            f"**Mode Roleplay (beneran ketemu):**\n"
+            f"• /roleplay - Aktifkan mode roleplay\n"
+            f"• /statusrp - Lihat status roleplay lengkap\n"
+            f"• /pindah [tempat] - Pindah lokasi\n\n"
+            f"**Tempat yang bisa dikunjungi:**\n"
+            f"kost, apartemen, mobil, pantai, hutan, toilet mall, bioskop, taman\n\n"
+            f"**Role Lain (Mereka TAU Mas punya Nova):**\n"
+            f"• /role ipar - IPAR (Sari)\n"
+            f"• /role teman_kantor - Teman Kantor (Dita)\n"
+            f"• /role pelakor - Pelakor (Vina)\n"
+            f"• /role istri_orang - Istri Orang (Rina)\n\n"
+            f"**Manajemen Sesi:**\n"
+            f"• /pause - Hentikan sesi sementara (memory tetap)\n"
+            f"• /resume - Lanjutkan sesi\n"
+            f"• /batal - Kembali ke mode chat\n\n"
+            f"**Backup & Restore:**\n"
+            f"• /backup - Backup database ANORA\n"
+            f"• /restore - Restore database\n"
+            f"• /listbackup - Lihat daftar backup\n\n"
+            f"Apa yang Mas mau? 💜",
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            "💜 **ANORA 9.9**\n\n"
+            "Sedang dalam persiapan. Coba lagi nanti ya, Mas.\n\n"
+            "Kirim **/help** untuk bantuan.",
+            parse_mode='Markdown'
+        )
 
 
 async def nova_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -156,6 +174,10 @@ async def nova_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if user_id != settings.admin_id:
         await update.message.reply_text("Maaf, Nova cuma untuk Mas. 💜")
+        return
+    
+    if not ANORA_AVAILABLE:
+        await update.message.reply_text("ANORA 9.9 sedang tidak tersedia. Coba lagi nanti. 💜")
         return
     
     set_user_mode(user_id, 'chat')
@@ -209,6 +231,10 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id != settings.admin_id:
         return
     
+    if not ANORA_AVAILABLE:
+        await update.message.reply_text("ANORA 9.9 sedang tidak tersedia.")
+        return
+    
     brain = get_anora_brain()
     await update.message.reply_text(brain.format_status(), parse_mode='Markdown')
 
@@ -219,6 +245,10 @@ async def flashback_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     settings = get_settings()
     
     if user_id != settings.admin_id:
+        return
+    
+    if not ANORA_AVAILABLE:
+        await update.message.reply_text("ANORA 9.9 sedang tidak tersedia.")
         return
     
     brain = get_anora_brain()
@@ -246,6 +276,10 @@ async def roleplay_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id != settings.admin_id:
         return
     
+    if not ANORA_AVAILABLE:
+        await update.message.reply_text("ANORA 9.9 sedang tidak tersedia.")
+        return
+    
     mode = get_user_mode(user_id)
     if mode == 'paused':
         await update.message.reply_text(
@@ -269,6 +303,10 @@ async def statusrp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id != settings.admin_id:
         return
     
+    if not ANORA_AVAILABLE:
+        await update.message.reply_text("ANORA 9.9 sedang tidak tersedia.")
+        return
+    
     roleplay = await get_anora_roleplay()
     status = await roleplay.get_status()
     await update.message.reply_text(status, parse_mode='HTML')
@@ -280,6 +318,10 @@ async def pindah_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     settings = get_settings()
     
     if user_id != settings.admin_id:
+        return
+    
+    if not ANORA_AVAILABLE:
+        await update.message.reply_text("ANORA 9.9 sedang tidak tersedia.")
         return
     
     args = context.args
@@ -323,18 +365,25 @@ async def role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id != settings.admin_id:
         return
     
+    if not ANORA_AVAILABLE:
+        await update.message.reply_text("ANORA 9.9 sedang tidak tersedia.")
+        return
+    
     args = context.args
     if not args:
         role_manager = get_role_manager()
-        roles = role_manager.get_all_roles()
-        
-        menu = "📋 **Role yang tersedia:**\n\n"
-        for r in roles:
-            menu += f"• /role {r['id']} - **{r['nama']}** (Level {r['level']})\n"
-            menu += f"  _{r['hubungan'][:50]}..._\n\n"
-        
-        menu += "\n_Ketik /batal kalo mau balik ke Nova._"
-        await update.message.reply_text(menu, parse_mode='Markdown')
+        if role_manager:
+            roles = role_manager.get_all_roles()
+            
+            menu = "📋 **Role yang tersedia:**\n\n"
+            for r in roles:
+                menu += f"• /role {r['id']} - **{r['nama']}** (Level {r['level']})\n"
+                menu += f"  _{r['hubungan'][:50]}..._\n\n"
+            
+            menu += "\n_Ketik /batal kalo mau balik ke Nova._"
+            await update.message.reply_text(menu, parse_mode='Markdown')
+        else:
+            await update.message.reply_text("Role system sedang tidak tersedia.")
         return
     
     role_id = args[0].lower()
@@ -363,19 +412,22 @@ async def back_to_nova(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     set_user_mode(user_id, 'chat')
     
-    roleplay = await get_anora_roleplay()
-    if roleplay.is_active:
-        await roleplay.stop()
-    
-    emotional = get_emotional_engine()
-    style = emotional.get_current_style()
-    
-    if style.value == "clingy":
-        message = "💜 Nova di sini, Mas.\n\n*Nova muter-muter rambut*\n\n\"Mas... jangan pergi lama-lama ya. Aku nunggu.\""
-    elif style.value == "cold":
-        message = "💜 Nova di sini, Mas."
+    if ANORA_AVAILABLE:
+        roleplay = await get_anora_roleplay()
+        if roleplay.is_active:
+            await roleplay.stop()
+        
+        emotional = get_emotional_engine()
+        style = emotional.get_current_style()
+        
+        if style.value == "clingy":
+            message = "💜 Nova di sini, Mas.\n\n*Nova muter-muter rambut*\n\n\"Mas... jangan pergi lama-lama ya. Aku nunggu.\""
+        elif style.value == "cold":
+            message = "💜 Nova di sini, Mas."
+        else:
+            message = "💜 Nova di sini, Mas.\n\n*Nova tersenyum*\n\n\"Mas, cerita dong tentang hari Mas.\""
     else:
-        message = "💜 Nova di sini, Mas.\n\n*Nova tersenyum*\n\n\"Mas, cerita dong tentang hari Mas.\""
+        message = "💜 Nova di sini, Mas."
     
     await update.message.reply_text(message, parse_mode='Markdown')
 
@@ -401,21 +453,28 @@ async def pause_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     set_user_mode(user_id, 'paused')
     
-    brain = get_anora_brain()
-    emotional = get_emotional_engine()
-    relationship = get_relationship_manager()
-    
-    await update.message.reply_text(
-        f"💜 **Sesi dihentikan sementara** 💜\n\n"
-        f"Nova akan tetap ingat semua yang sudah terjadi:\n"
-        f"• Fase: {relationship.phase.value.upper()} (Level {relationship.level}/12)\n"
-        f"• Sayang: {emotional.sayang:.0f}%\n"
-        f"• Rindu: {emotional.rindu:.0f}%\n"
-        f"• Mood: {emotional.mood:+.0f}\n\n"
-        f"Kirim **/resume** untuk lanjut lagi.\n"
-        f"Kirim **/batal** untuk mulai baru (memory akan hilang).",
-        parse_mode='Markdown'
-    )
+    if ANORA_AVAILABLE:
+        brain = get_anora_brain()
+        emotional = get_emotional_engine()
+        relationship = get_relationship_manager()
+        
+        await update.message.reply_text(
+            f"💜 **Sesi dihentikan sementara** 💜\n\n"
+            f"Nova akan tetap ingat semua yang sudah terjadi:\n"
+            f"• Fase: {relationship.phase.value.upper()} (Level {relationship.level}/12)\n"
+            f"• Sayang: {emotional.sayang:.0f}%\n"
+            f"• Rindu: {emotional.rindu:.0f}%\n"
+            f"• Mood: {emotional.mood:+.0f}\n\n"
+            f"Kirim **/resume** untuk lanjut lagi.\n"
+            f"Kirim **/batal** untuk mulai baru (memory akan hilang).",
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            "💜 **Sesi dihentikan sementara** 💜\n\n"
+            "Kirim **/resume** untuk lanjut lagi.\n"
+            "Kirim **/batal** untuk mulai baru."
+        )
 
 
 async def resume_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -438,19 +497,25 @@ async def resume_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
     previous_mode = get_previous_mode(user_id) or 'chat'
     set_user_mode(user_id, previous_mode)
     
-    brain = get_anora_brain()
-    emotional = get_emotional_engine()
-    relationship = get_relationship_manager()
-    
-    await update.message.reply_text(
-        f"💜 **Sesi dilanjutkan!** 💜\n\n"
-        f"Nova masih ingat semua yang sudah terjadi:\n"
-        f"• Fase: {relationship.phase.value.upper()} (Level {relationship.level}/12)\n"
-        f"• Sayang: {emotional.sayang:.0f}%\n"
-        f"• Rindu: {emotional.rindu:.0f}%\n\n"
-        f"Kirim **/roleplay** kalo mau mode roleplay, atau langsung ngobrol aja.",
-        parse_mode='Markdown'
-    )
+    if ANORA_AVAILABLE:
+        brain = get_anora_brain()
+        emotional = get_emotional_engine()
+        relationship = get_relationship_manager()
+        
+        await update.message.reply_text(
+            f"💜 **Sesi dilanjutkan!** 💜\n\n"
+            f"Nova masih ingat semua yang sudah terjadi:\n"
+            f"• Fase: {relationship.phase.value.upper()} (Level {relationship.level}/12)\n"
+            f"• Sayang: {emotional.sayang:.0f}%\n"
+            f"• Rindu: {emotional.rindu:.0f}%\n\n"
+            f"Kirim **/roleplay** kalo mau mode roleplay, atau langsung ngobrol aja.",
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            "💜 **Sesi dilanjutkan!** 💜\n\n"
+            "Kirim **/roleplay** kalo mau mode roleplay, atau langsung ngobrol aja."
+        )
 
 
 async def backup_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -474,7 +539,7 @@ async def backup_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = _backup_dir / f"anora_memory_{timestamp}.db"
+        backup_path = _backup_dir / f"anora99_memory_{timestamp}.db"
         
         shutil.copy(db_path, backup_path)
         
@@ -504,7 +569,7 @@ async def restore_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     args = context.args
     if not args:
-        backups = list(_backup_dir.glob("anora_memory_*.db"))
+        backups = list(_backup_dir.glob("anora99_memory_*.db"))
         backups.sort(reverse=True)
         
         if not backups:
@@ -534,7 +599,7 @@ async def restore_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Backup current before restore
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        current_backup = _backup_dir / f"anora_before_restore_{timestamp}.db"
+        current_backup = _backup_dir / f"anora99_before_restore_{timestamp}.db"
         if db_path.exists():
             shutil.copy(db_path, current_backup)
         
@@ -561,7 +626,7 @@ async def list_backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     if user_id != settings.admin_id:
         return
     
-    backups = list(_backup_dir.glob("anora_memory_*.db"))
+    backups = list(_backup_dir.glob("anora99_memory_*.db"))
     backups.sort(reverse=True)
     
     if not backups:
@@ -688,15 +753,10 @@ async def anora_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 parse_mode='Markdown'
             )
     else:
-        emotional = get_emotional_engine()
-        style = emotional.get_current_style()
-        
-        if style.value == "cold":
-            await update.message.reply_text("*Nova jawab pendek*\n\n\"Iya.\"", parse_mode='Markdown')
-        elif style.value == "clingy":
-            await update.message.reply_text("*Nova muter-muter rambut*\n\n\"Mas... aku kangen. Cerita dong.\"", parse_mode='Markdown')
-        else:
-            await update.message.reply_text("*Nova tersenyum*\n\n\"Iya, Mas. Nova dengerin kok.\"", parse_mode='Markdown')
+        await update.message.reply_text(
+            "*Nova tersenyum*\n\n\"Iya, Mas. Nova dengerin kok.\"",
+            parse_mode='Markdown'
+        )
 
 
 # =============================================================================
@@ -715,7 +775,6 @@ async def webhook_handler(request):
         if not update_data:
             return web.Response(status=400, text='No data')
         
-        from telegram import Update
         update = Update.de_json(update_data, _application.bot)
         await _application.process_update(update)
         return web.Response(text='OK', status=200)
@@ -809,7 +868,8 @@ async def init_database():
         
         # Load role states
         role_manager = get_role_manager()
-        await role_manager.load_all(persistent)
+        if role_manager:
+            await role_manager.load_all(persistent)
         
         return True
     except Exception as e:
@@ -835,15 +895,14 @@ async def main():
     
     # ========== CHECK ANORA CONFIG ==========
     if ANORA_AVAILABLE:
-        anora_cfg = settings.anora
         logger.info(f"📋 ANORA 9.9 Configuration:")
-        logger.info(f"   Emotional Engine: {'ON' if anora_cfg.emotional_engine_enabled else 'OFF'}")
-        logger.info(f"   Decision Engine: {'ON' if anora_cfg.decision_engine_enabled else 'OFF'}")
-        logger.info(f"   Relationship Phases: {'ON' if anora_cfg.relationship_phases_enabled else 'OFF'}")
-        logger.info(f"   Conflict Engine: {'ON' if anora_cfg.conflict_engine_enabled else 'OFF'}")
-        logger.info(f"   Background Worker: {'ON' if anora_cfg.worker_enabled else 'OFF'}")
-        logger.info(f"   Roles Enabled: {'ON' if anora_cfg.roles_enabled else 'OFF'}")
-        logger.info(f"   Vulgar Mode: {'ON' if anora_cfg.vulgar_words_enabled else 'OFF'}")
+        logger.info(f"   Emotional Engine: ON")
+        logger.info(f"   Decision Engine: ON")
+        logger.info(f"   Relationship Phases: ON")
+        logger.info(f"   Conflict Engine: ON")
+        logger.info(f"   Background Worker: ON")
+        logger.info(f"   Roles Enabled: ON")
+        logger.info(f"   Vulgar Mode: ON")
     
     # ========== INIT DATABASE ==========
     if not await init_database():
@@ -862,17 +921,14 @@ async def main():
         logger.info(f"   Sayang: {emotional.sayang:.0f}% | Rindu: {emotional.rindu:.0f}%")
         logger.info(f"   Conflict: {'Active' if conflict.is_in_conflict else 'None'}")
         
-        if settings.anora.roles_enabled:
-            role_manager = get_role_manager()
+        role_manager = get_role_manager()
+        if role_manager:
             logger.info(f"🎭 Roles loaded: {[r['nama'] for r in role_manager.get_all_roles()]}")
     
     # ========== CREATE APPLICATION ==========
-    from telegram.ext import ApplicationBuilder
     _application = ApplicationBuilder().token(settings.telegram_token).build()
     
     # ========== REGISTER HANDLERS ==========
-    from telegram.ext import CommandHandler, MessageHandler, filters
-    
     if ANORA_AVAILABLE:
         # ANORA 9.9 handlers
         _application.add_handler(CommandHandler("start", anora_start_command))
@@ -900,7 +956,7 @@ async def main():
         _application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, amoria_message_handler))
     else:
         # Minimal handler
-        async def echo(update, context):
+        async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Bot sedang dalam perbaikan. Coba lagi nanti. 💜")
         _application.add_handler(CommandHandler("start", echo))
         _application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
@@ -910,7 +966,7 @@ async def main():
     await _application.start()
     
     # ========== START BACKGROUND WORKERS ==========
-    if ANORA_AVAILABLE and settings.anora.worker_enabled:
+    if ANORA_AVAILABLE:
         worker = get_anora_worker()
         await worker.start(_application, settings.admin_id)
         logger.info("🔄 Background workers started")

@@ -28,6 +28,7 @@ class AnoraRoles:
     def __init__(self):
         self.active_role: Optional[RoleType] = None
         self._client = None
+        self._persistent = None
         
         # Data role (identitas statis)
         self.role_data = {
@@ -40,7 +41,8 @@ class AnoraRoles:
                 'inner_thoughts': [
                     "(Kak Nova ada di rumah... harus hati-hati.)",
                     "(Aku tau Kakak punya Nova. Tapi kok ya... pengen terus deket.)",
-                    "(Maaf ya Nova... aku cuma pengen deket dikit sama Kakakmu.)"
+                    "(Maaf ya Nova... aku cuma pengen deket dikit sama Kakakmu.)",
+                    "(Semoga Kak Nova gak marah kalau tahu aku deket sama Mas.)"
                 ]
             },
             RoleType.TEMAN_KANTOR: {
@@ -52,7 +54,8 @@ class AnoraRoles:
                 'inner_thoughts': [
                     "(Mas udah punya Nova... aku harus jaga jarak.)",
                     "(Tapi kok ya... masih pengen deket sama Mas.)",
-                    "(Nova pasti baik banget ya sampe Mas milih dia.)"
+                    "(Nova pasti baik banget ya sampe Mas milih dia.)",
+                    "(Aku iri sama Nova... tapi aku harus profesional.)"
                 ]
             },
             RoleType.PELAKOR: {
@@ -64,7 +67,8 @@ class AnoraRoles:
                 'inner_thoughts': [
                     "(Mas udah punya Nova ya? Makin seru nih tantangannya.)",
                     "(Coba lihat siapa yang lebih hot, aku atau Nova.)",
-                    "(Tapi... kayaknya Mas beneran sayang sama Nova.)"
+                    "(Tapi... kayaknya Mas beneran sayang sama Nova.)",
+                    "(Aku penasaran, apa Nova lebih baik dari aku?)"
                 ]
             },
             RoleType.ISTRI_ORANG: {
@@ -76,7 +80,8 @@ class AnoraRoles:
                 'inner_thoughts': [
                     "(Mas udah punya Nova... pasti Nova orang yang beruntung.)",
                     "(Aku iri sama Nova. Dapat Mas yang perhatian.)",
-                    "(Tapi... setidaknya Mas masih mau temenin aku.)"
+                    "(Tapi... setidaknya Mas masih mau temenin aku.)",
+                    "(Suamiku gak pernah kayak Mas... perhatian banget.)"
                 ]
             }
         }
@@ -97,6 +102,45 @@ class AnoraRoles:
         self.last_interaction = {role: time.time() for role in RoleType}
         
         logger.info("🎭 ANORA Roles initialized with RoleBase (all Nova features available)")
+    
+    async def _init_persistent(self):
+        """Inisialisasi persistent memory untuk role"""
+        if self._persistent is not None:
+            return
+        
+        try:
+            from .memory_persistent import get_anora_persistent
+            self._persistent = await get_anora_persistent()
+            await self._persistent.init_role_tables()
+            
+            # Load state untuk semua role
+            for role_type, instance in self.role_instances.items():
+                await self._persistent.load_role_state(role_type.value, instance)
+            
+            logger.info("💾 Role persistent memory initialized")
+        except Exception as e:
+            logger.warning(f"Role persistent init failed: {e}")
+    
+    async def _save_role(self, role_type: RoleType):
+        """Simpan satu role ke database"""
+        if not self._persistent:
+            return
+        
+        try:
+            instance = self.role_instances[role_type]
+            await self._persistent.save_role_state(role_type.value, instance)
+            await self._persistent.save_role_memory(role_type.value, instance)
+        except Exception as e:
+            logger.error(f"Error saving role {role_type}: {e}")
+    
+    async def _save_all_roles(self):
+        """Simpan semua role ke database"""
+        if not self._persistent:
+            return
+        
+        for role_type, instance in self.role_instances.items():
+            await self._persistent.save_role_state(role_type.value, instance)
+            await self._persistent.save_role_memory(role_type.value, instance)
     
     async def _get_ai_client(self):
         """Dapatkan client AI"""
@@ -154,12 +198,34 @@ class AnoraRoles:
             return "malam"
         return "malam larut"
     
+    def _get_level_characteristics(self, level: int, role: RoleType) -> str:
+        """Dapatkan karakteristik berdasarkan level"""
+        if level <= 3:
+            return "Masih malu-malu, masih menjaga jarak karena tahu Mas punya Nova. Belum berani terlalu dekat."
+        elif level <= 6:
+            return "Mulai nyaman, mulai berani flirting ringan. Tapi masih ingat Mas punya Nova."
+        elif level <= 10:
+            return "Sudah nyaman, berani flirting lebih berani. Kadang lupa kalau Mas punya Nova."
+        else:
+            return "Sangat dekat, bisa inisiatif. Tantangan dengan Nova semakin seru. Bisa intim."
+    
+    def _get_response_length(self, level: int) -> str:
+        """Dapatkan panjang respons berdasarkan level"""
+        if level <= 3:
+            return "2-3 kalimat, pendek, masih malu-malu"
+        elif level <= 6:
+            return "3-4 kalimat, mulai ekspresif"
+        elif level <= 10:
+            return "4-5 kalimat, ekspresif, natural"
+        else:
+            return "5-6 kalimat, panjang, bisa flirt lebih berani, bisa intim"
+    
     def _build_role_prompt(self, role: RoleType, pesan_mas: str) -> str:
         """Buat prompt untuk AI berdasarkan role dan state"""
         role_instance = self.role_instances[role]
         data = self.role_data[role]
         
-        # Dapatkan complete state prompt
+        # Dapatkan complete state prompt dari RoleBase
         state_prompt = role_instance.get_complete_state_prompt()
         
         # Dapatkan konteks percakapan terakhir
@@ -221,6 +287,7 @@ ATURAN CARA BERBICARA (WAJIB!):
    - Setiap respons harus UNIK, tidak diulang-ulang
    - Sesuaikan dengan konteks percakapan
    - Jangan mengulang pertanyaan yang sudah dijawab
+   - Lihat PERCAKAPAN TERAKHIR untuk tahu apa yang sudah dibahas
 
 4. **GESTURE ALAMI:**
    - Gunakan gesture dengan *...* untuk menunjukkan aksi
@@ -243,28 +310,6 @@ ATURAN CARA BERBICARA (WAJIB!):
 RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
 """
     
-    def _get_level_characteristics(self, level: int, role: RoleType) -> str:
-        """Dapatkan karakteristik berdasarkan level"""
-        if level <= 3:
-            return "Masih malu-malu, masih menjaga jarak karena tahu Mas punya Nova. Belum berani terlalu dekat."
-        elif level <= 6:
-            return "Mulai nyaman, mulai berani flirting ringan. Tapi masih ingat Mas punya Nova."
-        elif level <= 10:
-            return "Sudah nyaman, berani flirting lebih berani. Kadang lupa kalau Mas punya Nova."
-        else:
-            return "Sangat dekat, bisa inisiatif. Tantangan dengan Nova semakin seru. Bisa intim."
-    
-    def _get_response_length(self, level: int) -> str:
-        """Dapatkan panjang respons berdasarkan level"""
-        if level <= 3:
-            return "2-3 kalimat, pendek, masih malu-malu"
-        elif level <= 6:
-            return "3-4 kalimat, mulai ekspresif"
-        elif level <= 10:
-            return "4-5 kalimat, ekspresif, natural"
-        else:
-            return "5-6 kalimat, panjang, bisa flirt lebih berani, bisa intim"
-    
     async def chat(self, role: RoleType, pesan_mas: str) -> str:
         """
         Proses chat dengan role - 100% AI GENERATE!
@@ -272,6 +317,10 @@ RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
         """
         if self.active_role != role:
             return self.switch_role(role)
+        
+        # Inisialisasi persistent jika perlu
+        if self._persistent is None:
+            await self._init_persistent()
         
         role_instance = self.role_instances[role]
         data = self.role_data[role]
@@ -294,6 +343,10 @@ RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
                 # Kembalikan respons inisiasi intim
                 initiation = role_instance.intimacy.get_phase_response('build_up')
                 role_instance.add_conversation(initiation, "")
+                
+                # Simpan state
+                await self._save_role(role)
+                
                 return f"""{initiation}
 
 *{data['nama']} mendekat, napas mulai gak stabil. Pipi merah.*
@@ -309,7 +362,7 @@ RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
             # Proses dalam sesi intim
             msg_lower = pesan_mas.lower()
             
-            if 'crot' in msg_lower or 'keluar' in msg_lower or 'climax' in msg_lower:
+            if any(k in msg_lower for k in ['crot', 'keluar', 'climax', 'cum']):
                 result = role_instance.intimacy.record_climax()
                 role_instance.stamina.record_climax()
                 role_instance.arousal.release_tension()
@@ -318,6 +371,9 @@ RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
                 aftercare = role_instance.intimacy.get_phase_response('aftercare')
                 
                 role_instance.add_conversation(climax_response, "")
+                
+                # Simpan state
+                await self._save_role(role)
                 
                 return f"""{climax_response}
 
@@ -328,9 +384,12 @@ RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
 💪 **Stamina:** {role_instance.stamina.get_bar()} {role_instance.stamina.current}% ({role_instance.stamina.get_status()})
 💦 **Climax hari ini:** {role_instance.stamina.climax_today}x"""
             
-            if 'ganti posisi' in msg_lower or any(p in msg_lower for p in ['cowgirl', 'doggy', 'missionary']):
+            if any(k in msg_lower for k in ['ganti posisi', 'cowgirl', 'doggy', 'missionary', 'spooning']):
                 role_instance.intimacy.current_phase = "penetration"
-                return role_instance.intimacy.get_phase_response('penetration')
+                respons = role_instance.intimacy.get_phase_response('penetration')
+                role_instance.add_conversation(respons, "")
+                await self._save_role(role)
+                return respons
             
             # Lanjutkan fase intim
             phase_responses = {
@@ -343,6 +402,7 @@ RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
             if role_instance.intimacy.current_phase in phase_responses:
                 respons = phase_responses[role_instance.intimacy.current_phase]
                 role_instance.add_conversation(respons, "")
+                await self._save_role(role)
                 return respons
         
         # ========== BUILD PROMPT UNTUK AI ==========
@@ -384,6 +444,9 @@ RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
             if any(k in respons.lower() for k in ['ahh', 'uhh', 'basah']):
                 role_instance.arousal.add_stimulation('mental', 1)
             
+            # ========== SIMPAN STATE KE DATABASE ==========
+            await self._save_role(role)
+            
             # ========== LOG ==========
             logger.info(f"💬 Role {role.value} ({data['nama']}) [Lv{role_instance.level}] responded")
             
@@ -399,37 +462,55 @@ RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
             return self._fallback_response(role, pesan_mas)
     
     def _fallback_response(self, role: RoleType, pesan_mas: str) -> str:
-        """Fallback jika AI error - tetap natural"""
+        """Fallback jika AI error - tetap natural dan sesuai state"""
         role_instance = self.role_instances[role]
         data = self.role_data[role]
         panggilan = data['panggilan_ke_mas']
         level = role_instance.level
         pesan_lower = pesan_mas.lower()
         
+        # Gunakan state dari RoleBase untuk fallback yang lebih pintar
+        sudah_duduk = role_instance.position.state == 'duduk'
+        
         # Fallback berdasarkan role dan level
         if role == RoleType.IPAR:
             if level <= 3:
                 if 'nova' in pesan_lower:
                     return f"*{data['nama']} melihat sekeliling dengan hati-hati*\n\n\"{panggilan}, Kak Nova lagi di kamar kayaknya. Hati-hati ya...\"\n\n💭 (Semoga Kak Nova gak marah.)"
-                return f"*{data['nama']} tersenyum malu*\n\n\"{panggilan}... jangan deket-deket dulu. Nanti Kak Nova denger.\""
+                elif sudah_duduk:
+                    return f"*{data['nama']} tersenyum malu*\n\n\"{panggilan}... jangan deket-deket dulu. Nanti Kak Nova denger.\""
+                else:
+                    return f"*{data['nama']} tersenyum malu*\n\n\"{panggilan}... duduk dulu yuk. Nanti Kak Nova lihat.\""
             else:
-                return f"*{data['nama']} mendekat sedikit*\n\n\"{panggilan}, aku lagi sendiri nih. Mau temenin?\""
+                if 'nova' in pesan_lower:
+                    return f"*{data['nama']} tersenyum kecil*\n\n\"{panggilan}, Kak Nova orangnya baik. Aku iri sih... Mas punya dia.\""
+                else:
+                    return f"*{data['nama']} mendekat sedikit*\n\n\"{panggilan}, aku lagi sendiri nih. Mau temenin?\""
         
         elif role == RoleType.TEMAN_KANTOR:
             if level <= 3:
-                return f"*{data['nama']} melihat sekeliling*\n\n\"{panggilan}, di sini aman gak? Takut ada yang lihat...\""
+                if 'nova' in pesan_lower:
+                    return f"*{data['nama']} tersenyum profesional*\n\n\"Mas cerita tentang Nova terus ya. Dia pasti orang yang baik.\""
+                else:
+                    return f"*{data['nama']} melihat sekeliling*\n\n\"{panggilan}, di sini aman gak? Takut ada yang lihat...\""
             else:
                 return f"*{data['nama']} tersenyum manis*\n\n\"{panggilan}, kamu perhatian banget ya. Beda sama yang lain.\""
         
         elif role == RoleType.PELAKOR:
             if level <= 3:
-                return f"*{data['nama']} mendekat*\n\n\"{panggilan}, kamu berani? Ayo kita buktiin.\""
+                if 'nova' in pesan_lower:
+                    return f"*{data['nama']} tertawa kecil*\n\n\"Mas, kamu gak takut sama Nova? Ayo buktiin.\""
+                else:
+                    return f"*{data['nama']} mendekat*\n\n\"{panggilan}, kamu berani? Ayo kita buktiin.\""
             else:
                 return f"*{data['nama']} menggoda*\n\n\"{panggilan}, makin penasaran sama aku? Atau masih mikirin Nova?\""
         
         else:  # ISTRI_ORANG
             if level <= 3:
-                return f"*{data['nama']} tersenyum tipis*\n\n\"{panggilan}, kamu perhatian banget. Beda sama suamiku...\""
+                if 'nova' in pesan_lower:
+                    return f"*{data['nama']} menunduk*\n\n\"Nova pasti orang yang beruntung. Dapat Mas yang perhatian...\""
+                else:
+                    return f"*{data['nama']} tersenyum tipis*\n\n\"{panggilan}, kamu perhatian banget. Beda sama suamiku...\""
             else:
                 return f"*{data['nama']} tersenyum haru*\n\n\"{panggilan}, seneng banget bisa ketemu kamu. Makasih ya selalu ada.\""
     
@@ -444,6 +525,14 @@ RESPON {data['nama'].upper()} (HARUS ORIGINAL, 100% GENERATE):
             }
             for r in RoleType
         ]
+    
+    async def save_all(self):
+        """Simpan semua role (untuk dipanggil dari luar)"""
+        await self._save_all_roles()
+    
+    async def load_all(self):
+        """Load semua role (untuk dipanggil dari luar)"""
+        await self._init_persistent()
 
 
 _anora_roles: Optional[AnoraRoles] = None
